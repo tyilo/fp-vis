@@ -41,11 +41,18 @@
   let info: Info | undefined = undefined;
 
   function updateInfo(): void {
+    let newFloatInfo;
+    try {
+      newFloatInfo = new FloatInfo(numberInput.value);
+    } catch (e) {
+      alert(`Error parsing input: ${e}`);
+      return;
+    }
     if (floatInfo !== undefined) {
       floatInfo.free();
     }
-    floatInfo = new FloatInfo(numberInput.value);
-    info = floatInfo.get_info();
+    floatInfo = newFloatInfo;
+    info = floatInfo!.get_info();
   }
 
   function toggleBit(floatType: FloatType, i: number): void {

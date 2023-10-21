@@ -510,13 +510,13 @@ pub struct FloatInfo {
 #[wasm_bindgen]
 impl FloatInfo {
     #[wasm_bindgen(constructor)]
-    pub fn new(v: &str) -> Option<FloatInfo> {
-        let exact: Exact = v.parse().ok()?;
+    pub fn new(v: &str) -> Result<FloatInfo, JsError> {
+        let exact: Exact = v.parse()?;
 
         let f64 = (&exact).into();
         let f32 = (&exact).into();
 
-        Some(Self { exact, f64, f32 })
+        Ok(Self { exact, f64, f32 })
     }
 
     pub fn get_info(&self) -> Result<JsValue, JsValue> {
