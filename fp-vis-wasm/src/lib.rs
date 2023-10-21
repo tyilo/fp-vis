@@ -288,11 +288,13 @@ impl From<Ratio<BigInt>> for Exact {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 enum ParseError {
+    #[error("more than 2 '/' characters encountered")]
+    TooManySlashes,
     #[error("more than 2 e's encountered")]
     TooManyEs,
     #[error("invalid exponent: {0}")]
     InvalidExponent(ParseIntError),
-    #[error("more than 2 points encountered")]
+    #[error("more than 2 '.' characters encountered")]
     TooManyPoints,
     #[error("empty number")]
     EmptyNumber,
@@ -300,18 +302,31 @@ enum ParseError {
     InvalidDigit(u8),
 }
 
-impl FromStr for Exact {
-    type Err = ParseError;
+struct TooManySplits;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((n, d)) = s.split_once('/') {
-            let n = Self::from_str(n)?;
-            let d = Self::from_str(d)?;
+fn split_1_or_2(bytes: &[u8], split_by: u8) -> Result<(&[u8], Option<&[u8]>), TooManySplits> {
+    let mut split = bytes.split(|b| b == &split_by).fuse();
+    let first = split.next().unwrap();
+    let second = split.next();
+    match split.next() {
+        None => Ok((first, second)),
+        Some(_) => Err(TooManySplits),
+    }
+}
+
+impl TryFrom<&[u8]> for Exact {
+    type Error = ParseError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let (before_slash, after_slash) =
+            split_1_or_2(&bytes, b'/').map_err(|_| ParseError::TooManySlashes)?;
+
+        if let Some(after_slash) = after_slash {
+            let n: Self = before_slash.try_into()?;
+            let d: Self = after_slash.try_into()?;
             return Ok(n / d);
         }
 
-        let s = s.trim();
-        let bytes = s.as_bytes().to_ascii_lowercase();
         let mut rem = &bytes[..];
 
         let mut sign = Sign::Positive;
@@ -332,24 +347,17 @@ impl FromStr for Exact {
             _ => (),
         }
 
-        let mut separated = rem.split(|b| b == &b'e').fuse();
-        let before_e = separated.next().unwrap();
-        let after_e = separated.next().unwrap_or(b"0");
-        if separated.next().is_some() {
-            return Err(ParseError::TooManyEs);
-        }
+        let (before_e, after_e) = split_1_or_2(rem, b'e').map_err(|_| ParseError::TooManyEs)?;
+        let after_e = after_e.unwrap_or(b"0");
 
         let exp: i32 = String::from_utf8(after_e.to_vec())
             .unwrap()
             .parse()
             .map_err(|e| ParseError::InvalidExponent(e))?;
 
-        let mut separated = before_e.split(|b| b == &b'.').fuse();
-        let before_dot = separated.next().unwrap();
-        let after_dot = separated.next().unwrap_or(b"");
-        if separated.next().is_some() {
-            return Err(ParseError::TooManyPoints);
-        }
+        let (before_dot, after_dot) =
+            split_1_or_2(before_e, b'.').map_err(|_| ParseError::TooManyPoints)?;
+        let after_dot = after_dot.unwrap_or(b"");
 
         if before_dot == b"" && after_dot == b"" {
             return Err(ParseError::EmptyNumber);
@@ -381,6 +389,17 @@ impl FromStr for Exact {
         rat *= Ratio::from(10u8.to_biguint().unwrap()).pow(exp);
 
         Ok(Self::Finite(sign, rat))
+    }
+}
+
+impl FromStr for Exact {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s
+            .replace(|c: char| c.is_whitespace(), "")
+            .to_ascii_lowercase();
+        s.as_bytes().try_into()
     }
 }
 
