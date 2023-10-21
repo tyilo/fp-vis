@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+
+(
+	cd fp-vis-wasm
+	wasm-pack build --target web
+)
+
+pnpm run build
