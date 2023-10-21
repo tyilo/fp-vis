@@ -397,7 +397,7 @@ impl FromStr for Exact {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s
-            .replace(|c: char| c.is_whitespace(), "")
+            .replace(|c: char| c.is_whitespace() || c == ',', "")
             .to_ascii_lowercase();
         s.as_bytes().try_into()
     }
