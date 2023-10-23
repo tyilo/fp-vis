@@ -1,21 +1,30 @@
 mod utils;
+use bitvec::access::BitSafeU8;
+use bitvec::prelude::*;
+use duplicate::duplicate_item;
+use std::fmt::Debug;
 use std::fmt::Display;
+use std::marker::PhantomData;
 
+use bitvec::slice::BitSlice;
+use funty::Floating;
 use std::num::ParseIntError;
 use std::ops::{Div, Mul};
 use std::str::FromStr;
 
 use std::cmp::Ordering;
 
+use bitvec::prelude::BitBox;
+use bitvec::prelude::Msb0;
 use num_bigint::{BigInt, BigUint};
 use num_bigint::{ToBigInt, ToBigUint};
 use num_rational::Ratio;
 use num_traits::float::FloatCore;
-use num_traits::{One, PrimInt, Signed, Zero};
+use num_traits::{One, Signed, Zero};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 enum Sign {
     Positive,
@@ -53,11 +62,73 @@ fn to_bigint_ratio(sign: Sign, v: Ratio<BigUint>) -> Ratio<BigInt> {
     (n, d.to_bigint().unwrap()).into()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+enum NaNType {
+    Signaling,
+    Quiet,
+}
+
+impl Mul for NaNType {
+    type Output = NaNType;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        if self == NaNType::Quiet && rhs == NaNType::Quiet {
+            NaNType::Quiet
+        } else {
+            NaNType::Signaling
+        }
+    }
+}
+
+impl Display for NaNType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            NaNType::Signaling => "signaling",
+            NaNType::Quiet => "quiet",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NaN {
+    typ: NaNType,
+    sign: Sign,
+    payload: u64,
+}
+
+impl NaN {
+    fn new(sign: Sign, typ: NaNType, payload: u64) -> Option<Self> {
+        if typ == NaNType::Signaling && payload == 0 {
+            return None;
+        }
+
+        Some(Self { sign, typ, payload })
+    }
+}
+
+impl Default for NaN {
+    fn default() -> Self {
+        Self {
+            sign: Sign::Positive,
+            typ: NaNType::Quiet,
+            payload: 0,
+        }
+    }
+}
+
+impl Display for NaN {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NaN ({})", self.typ)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Exact {
     Finite(Sign, Ratio<BigUint>),
     Infinite(Sign),
-    NaN,
+    NaN(NaN),
 }
 
 impl Display for Exact {
@@ -75,8 +146,8 @@ impl Display for Exact {
             Exact::Infinite(Sign::Negative) => {
                 write!(f, "-inf")?;
             }
-            Exact::NaN => {
-                write!(f, "NaN")?;
+            Exact::NaN(nan) => {
+                write!(f, "{}", nan)?;
             }
         }
         Ok(())
@@ -131,7 +202,7 @@ fn closest_float<F: FloatCore + Display>(v: &Ratio<BigInt>) -> F {
 }
 
 impl Exact {
-    fn to_float<F: FloatCore + Display>(&self) -> F {
+    fn to_float<F: FloatingExt + FloatCore + Display>(&self) -> F {
         let zero: F = Zero::zero();
         match self {
             Exact::Finite(sign, value) => {
@@ -151,14 +222,14 @@ impl Exact {
             }
             Exact::Infinite(Sign::Positive) => F::infinity(),
             Exact::Infinite(Sign::Negative) => F::neg_infinity(),
-            Exact::NaN => F::nan(),
+            Exact::NaN(nan) => F::specific_nan(nan.sign, nan.typ, nan.payload),
         }
     }
 
-    fn from_float<F: FloatCore>(v: F) -> Self {
-        let sign = v.signum();
-        if sign.is_nan() {
-            return Self::NaN;
+    fn from_float<F: FloatingExt + FloatCore>(v: F) -> Self {
+        let sign = Floating::signum(v);
+        if Floating::is_nan(sign) {
+            return Self::NaN(v.to_nan().unwrap());
         }
 
         let sign = if sign == One::one() {
@@ -167,7 +238,7 @@ impl Exact {
             Sign::Negative
         };
 
-        if v.is_infinite() {
+        if Floating::is_infinite(v) {
             return Self::Infinite(sign);
         }
 
@@ -182,7 +253,7 @@ impl Exact {
 
     fn error(&self, other: &Self) -> Option<Ratio<BigInt>> {
         match (self, other) {
-            (Exact::NaN, Exact::NaN) => Some(Zero::zero()),
+            (Exact::NaN(_), Exact::NaN(_)) => Some(Zero::zero()),
             (Exact::Infinite(s1), Exact::Infinite(s2)) => {
                 if s1 == s2 {
                     Some(Zero::zero())
@@ -205,15 +276,16 @@ impl Div for Exact {
 
     fn div(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Exact::NaN, _) => Exact::NaN,
-            (_, Exact::NaN) => Exact::NaN,
-            (Exact::Infinite(_), Exact::Infinite(_)) => Exact::NaN,
+            (Exact::NaN(nan1), Exact::NaN(nan2)) => Exact::NaN(nan1.min(nan2)),
+            (nan @ Exact::NaN(_), _) => nan,
+            (_, nan @ Exact::NaN(_)) => nan,
+            (Exact::Infinite(_), Exact::Infinite(_)) => Exact::NaN(NaN::default()),
 
             (Exact::Infinite(s1), Exact::Finite(s2, _)) => Exact::Infinite(s1 * s2),
             (Exact::Finite(s1, _), Exact::Infinite(s2)) => Exact::Finite(s1 * s2, Zero::zero()),
             (Exact::Finite(s1, v1), Exact::Finite(s2, v2)) => {
                 match (v1 == Zero::zero(), v2 == Zero::zero()) {
-                    (true, true) => Exact::NaN,
+                    (true, true) => Exact::NaN(NaN::default()),
                     (false, true) => Exact::Infinite(s1 * s2),
                     _ => Exact::Finite(s1 * s2, v1 / v2),
                 }
@@ -222,27 +294,22 @@ impl Div for Exact {
     }
 }
 
-impl From<&Exact> for f64 {
-    fn from(value: &Exact) -> Self {
-        value.to_float()
+#[duplicate_item(
+  F;
+  [f64];
+  [f32];
+)]
+mod from_to_exact {
+    use super::Exact;
+    impl From<&Exact> for F {
+        fn from(value: &Exact) -> Self {
+            value.to_float()
+        }
     }
-}
-
-impl From<&Exact> for f32 {
-    fn from(value: &Exact) -> Self {
-        value.to_float()
-    }
-}
-
-impl From<f64> for Exact {
-    fn from(value: f64) -> Self {
-        Self::from_float(value)
-    }
-}
-
-impl From<f32> for Exact {
-    fn from(value: f32) -> Self {
-        Self::from_float(value)
+    impl From<F> for Exact {
+        fn from(value: F) -> Self {
+            Self::from_float(value)
+        }
     }
 }
 
@@ -319,7 +386,7 @@ impl TryFrom<&[u8]> for Exact {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let (before_slash, after_slash) =
-            split_1_or_2(&bytes, b'/').map_err(|_| ParseError::TooManySlashes)?;
+            split_1_or_2(bytes, b'/').map_err(|_| ParseError::TooManySlashes)?;
 
         if let Some(after_slash) = after_slash {
             let n: Self = before_slash.try_into()?;
@@ -327,7 +394,7 @@ impl TryFrom<&[u8]> for Exact {
             return Ok(n / d);
         }
 
-        let mut rem = &bytes[..];
+        let mut rem = bytes;
 
         let mut sign = Sign::Positive;
         while let Some((b, r)) = rem.split_first() {
@@ -343,7 +410,7 @@ impl TryFrom<&[u8]> for Exact {
 
         match rem {
             b"inf" | b"infinity" => return Ok(Self::Infinite(sign)),
-            b"nan" => return Ok(Self::NaN),
+            b"nan" => return Ok(Self::NaN(NaN::default())),
             _ => (),
         }
 
@@ -353,7 +420,7 @@ impl TryFrom<&[u8]> for Exact {
         let exp: i32 = String::from_utf8(after_e.to_vec())
             .unwrap()
             .parse()
-            .map_err(|e| ParseError::InvalidExponent(e))?;
+            .map_err(ParseError::InvalidExponent)?;
 
         let (before_dot, after_dot) =
             split_1_or_2(before_e, b'.').map_err(|_| ParseError::TooManyPoints)?;
@@ -368,7 +435,7 @@ impl TryFrom<&[u8]> for Exact {
                 bytes = b"0";
             }
             for b in bytes {
-                if !(b'0'..=b'9').contains(b) {
+                if !b.is_ascii_digit() {
                     return Err(ParseError::InvalidDigit(*b));
                 }
             }
@@ -416,67 +483,130 @@ struct FloatParts {
     mantissa: FloatPart,
 }
 
-trait FloatCoreExt: FloatCore {
+#[derive(Debug)]
+struct FloatBits<F: FloatingExt> {
+    bits: BitBox<u8, Msb0>,
+    _phantom: PhantomData<F>,
+}
+
+impl<F: FloatingExt> FloatBits<F> {
+    fn zero() -> Self {
+        Self {
+            bits: bitvec![u8, Msb0; 0; F::BITS].into(),
+            _phantom: PhantomData,
+        }
+    }
+
+    fn from(v: F) -> Self {
+        Self {
+            bits: BitBox::from_boxed_slice(v.to_boxed_be_bytes()),
+            _phantom: PhantomData,
+        }
+    }
+
+    fn to_float(&self) -> F {
+        F::from_bits(self.bits.load_be())
+    }
+
+    #[duplicate_item(
+        method       split_at       u8          reference(type);
+        [parts]      [split_at]     [u8]        [& type];
+        [parts_mut]  [split_at_mut] [BitSafeU8] [&mut type];
+    )]
+    #[allow(clippy::needless_arbitrary_self_type)]
+    fn method(self: reference([Self])) -> [reference([BitSlice<u8, Msb0>]); 3] {
+        let (sign_bit, rem) = self.bits.split_at(1);
+        let (exponent_bits, mantissa_bits) = rem.split_at(F::EXPONENT_BITS);
+        [sign_bit, exponent_bits, mantissa_bits]
+    }
+}
+
+trait FloatingExt: Floating {
+    fn to_boxed_be_bytes(self) -> Box<[u8]>;
+
     const BITS: usize = std::mem::size_of::<Self>() * 8;
 
-    const MANTISSA_BITS: usize;
+    const MANTISSA_BITS: usize = Self::MANTISSA_DIGITS as usize - 1;
     const EXPONENT_BITS: usize = Self::BITS - Self::MANTISSA_BITS - 1;
 
-    type BitsT: PrimInt + From<u8>;
-    fn to_bits(self) -> Self::BitsT;
-    fn from_bits(v: Self::BitsT) -> Self;
+    fn specific_nan(sign: Sign, typ: NaNType, payload: u64) -> Self {
+        let mut bits = FloatBits::<Self>::zero();
+        let [sign_bit, exponent_bits, mantissa_bits] = bits.parts_mut();
+        let (nan_type_bit, payload_bits) = mantissa_bits.split_at_mut(1);
+
+        if sign == Sign::Negative {
+            sign_bit.set(0, true);
+        }
+
+        exponent_bits.fill(true);
+
+        if typ == NaNType::Quiet {
+            nan_type_bit.set(0, true);
+        }
+
+        payload_bits.store_be(payload);
+
+        bits.to_float()
+    }
+
+    fn to_nan(self) -> Option<NaN> {
+        let bits = FloatBits::from(self);
+        let [sign_bit, exponent_bits, mantissa_bits] = bits.parts();
+        let (nan_type_bit, payload_bits) = mantissa_bits.split_at(1);
+
+        let sign = if sign_bit[0] {
+            Sign::Negative
+        } else {
+            Sign::Positive
+        };
+
+        if !exponent_bits.all() {
+            return None;
+        }
+
+        let typ = if nan_type_bit[0] {
+            NaNType::Quiet
+        } else {
+            NaNType::Signaling
+        };
+
+        let payload: u64 = payload_bits.load_be();
+
+        Some(NaN::new(sign, typ, payload).unwrap())
+    }
 }
 
-impl FloatCoreExt for f64 {
-    const MANTISSA_BITS: usize = f64::MANTISSA_DIGITS as usize - 1;
-
-    type BitsT = u64;
-
-    fn to_bits(self) -> Self::BitsT {
-        self.to_bits()
-    }
-
-    fn from_bits(v: Self::BitsT) -> Self {
-        Self::from_bits(v)
+impl FloatingExt for f64 {
+    fn to_boxed_be_bytes(self) -> Box<[u8]> {
+        Box::new(self.to_be_bytes())
     }
 }
 
-impl FloatCoreExt for f32 {
-    const MANTISSA_BITS: usize = f32::MANTISSA_DIGITS as usize - 1;
-
-    type BitsT = u32;
-
-    fn to_bits(self) -> Self::BitsT {
-        self.to_bits()
-    }
-
-    fn from_bits(v: Self::BitsT) -> Self {
-        Self::from_bits(v)
+impl FloatingExt for f32 {
+    fn to_boxed_be_bytes(self) -> Box<[u8]> {
+        Box::new(self.to_be_bytes())
     }
 }
 
 impl FloatParts {
-    fn from_float<F: FloatCoreExt>(v: F) -> Self {
-        let bits = v.to_bits();
-        let bit_arr: Vec<bool> = (0u8..F::BITS.try_into().unwrap())
-            .rev()
-            .map(|i| bits & (F::BitsT::from(1) << i.into()) != 0.into())
-            .collect();
+    fn from_float<F: FloatingExt + FloatCore>(v: F) -> Self {
+        let bits = FloatBits::from(v);
+        let [sign_bit, exponent_bits, mantissa_bits] = bits.parts();
 
         let (mantissa, exponent, sign) = v.integer_decode();
 
         Self {
             sign: FloatPart {
                 value: format_number(&sign.to_string()),
-                bits: bit_arr[..1].to_vec(),
+                bits: sign_bit.iter().by_vals().collect(),
             },
             exponent: FloatPart {
                 value: format_number(&exponent.to_string()),
-                bits: bit_arr[1..F::EXPONENT_BITS + 1].to_vec(),
+                bits: exponent_bits.iter().by_vals().collect(),
             },
             mantissa: FloatPart {
                 value: format_number(&mantissa.to_string()),
-                bits: bit_arr[F::EXPONENT_BITS + 1..].to_vec(),
+                bits: mantissa_bits.iter().by_vals().collect(),
             },
         }
     }
@@ -484,6 +614,7 @@ impl FloatParts {
 
 #[derive(Serialize)]
 struct FInfo {
+    hex: String,
     value: String,
     category: String,
     error: String,
@@ -491,16 +622,24 @@ struct FInfo {
 }
 
 impl FInfo {
-    fn new<F: FloatCoreExt + Display>(exact: &Exact, v: F) -> Self {
+    fn new<F: FloatingExt + FloatCore + Display>(exact: &Exact, v: F) -> Self {
         let v_exact = Exact::from_float(v);
         let error = exact
             .error(&v_exact)
             .map(|error| format_number(&format!("{:.100}", error)))
             .unwrap_or_else(|| "Infinity".to_string());
 
+        let value = if Floating::is_nan(v) {
+            let nan_info = v.to_nan().unwrap();
+            format!("NaN ({})", nan_info.typ)
+        } else {
+            format_number(&format!("{:.100}", v))
+        };
+
         Self {
-            value: format_number(&format!("{:.100}", v)),
-            category: format!("{:?}", v.classify()),
+            hex: format!("0x{:0width$x}", v.to_bits(), width = F::BITS / 4),
+            value,
+            category: format!("{:?}", Floating::classify(v)),
             error,
             parts: FloatParts::from_float(v),
         }
@@ -638,7 +777,7 @@ mod test {
 
     #[test]
     fn test_nan() {
-        test_parse_ok("nan", NaN);
+        test_parse_ok("nan", Exact::NaN(super::NaN::default()));
     }
 
     #[test]
@@ -754,5 +893,17 @@ mod test {
         assert_eq!(format_number("12345"), "12,345");
         assert_eq!(format_number("123456"), "123,456");
         assert_eq!(format_number("1234567"), "1,234,567");
+    }
+
+    #[test]
+    fn nan_conversion() {
+        let nan = super::NaN::new(Positive, NaNType::Quiet, 123).unwrap();
+
+        let v = Exact::NaN(nan.clone());
+        let f64 = v.to_float::<f64>();
+        assert_eq!(f64.to_nan().as_ref(), Some(&nan));
+
+        let f32 = v.to_float::<f32>();
+        assert_eq!(f32.to_nan().as_ref(), Some(&nan));
     }
 }

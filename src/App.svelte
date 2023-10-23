@@ -18,6 +18,7 @@
   };
 
   type FInfo = {
+    hex: string;
     value: string;
     category: string;
     error: string;
@@ -129,6 +130,7 @@
       {@const formula = getFormula(finfo)}
       <section>
         <h1>{floatType}</h1>
+        <p>{finfo.hex}</p>
         <table>
           <thead>
             <tr>
