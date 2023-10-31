@@ -116,10 +116,19 @@
     );
   }
 
+  function getHash(): string {
+    return decodeURIComponent(window.location.hash.substring(1));
+  }
+
   onMount(async () => {
-    numberInput.value = decodeURIComponent(window.location.hash.substring(1)) || "1 / 3";
+    numberInput.value = getHash() || "1 / 3";
     await init();
     updateInfo();
+
+    window.addEventListener("hashchange", () => {
+      numberInput.value = getHash();
+      updateInfo();
+    });
   });
 
   $: console.log(info);
