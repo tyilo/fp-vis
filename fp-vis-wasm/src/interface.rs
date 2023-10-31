@@ -1,7 +1,7 @@
-use crate::float::{Exact, FloatBits, FloatingExt};
 use crate::float::format_number;
-use std::fmt::Display;
+use crate::float::{Exact, FloatBits, FloatingExt};
 use funty::Floating;
+use std::fmt::Display;
 
 use num_traits::float::FloatCore;
 use serde::Serialize;
@@ -45,34 +45,39 @@ impl FloatParts {
 }
 
 #[derive(Serialize)]
+struct Value {
+    fraction: String,
+    decimal: String,
+}
+
+impl From<&Exact> for Value {
+    fn from(value: &Exact) -> Self {
+        Self {
+            fraction: value.to_string(),
+            decimal: value.to_exact_decimal(),
+        }
+    }
+}
+
+#[derive(Serialize)]
 struct FInfo {
     hex: String,
-    value: String,
+    value: Value,
     category: String,
-    error: String,
+    error: Value,
     parts: FloatParts,
 }
 
 impl FInfo {
     fn new<F: FloatingExt + FloatCore + Display>(exact: &Exact, v: F) -> Self {
         let v_exact = Exact::from_float(v);
-        let error = exact
-            .error(&v_exact)
-            .map(|error| format_number(&format!("{:.100}", error)))
-            .unwrap_or_else(|| "Infinity".to_string());
-
-        let value = if Floating::is_nan(v) {
-            let nan_info = v.to_nan().unwrap();
-            format!("NaN ({})", nan_info.typ)
-        } else {
-            format_number(&format!("{:.100}", v))
-        };
+        let error = v_exact.clone() - exact.clone();
 
         Self {
             hex: format!("0x{:0width$x}", v.to_bits(), width = F::BITS / 4),
-            value,
+            value: (&v_exact).into(),
             category: format!("{:?}", Floating::classify(v)),
-            error,
+            error: (&error).into(),
             parts: FloatParts::from_float(v),
         }
     }
@@ -86,7 +91,7 @@ struct FInfos {
 
 #[derive(Serialize)]
 struct Info {
-    value: String,
+    value: Value,
     floats: FInfos,
 }
 
@@ -111,7 +116,7 @@ impl FloatInfo {
 
     pub fn get_info(&self) -> Result<JsValue, JsValue> {
         let info = Info {
-            value: self.exact.to_string(),
+            value: (&self.exact).into(),
             floats: FInfos {
                 f64: FInfo::new(&self.exact, self.f64),
                 f32: FInfo::new(&self.exact, self.f32),

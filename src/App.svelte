@@ -1,6 +1,7 @@
 <script lang="ts">
   import init, { FloatInfo } from "../fp-vis-wasm/pkg";
   import { onMount } from "svelte";
+  import Values from "./Values.svelte";
 
   import katex from "katex";
 
@@ -17,11 +18,16 @@
     bits: boolean[];
   };
 
+  type Value = {
+    fraction: string;
+    decimal: string;
+  };
+
   type FInfo = {
     hex: string;
-    value: string;
+    value: Value;
     category: string;
-    error: string;
+    error: Value;
     parts: Record<BitType, FloatPart>;
   };
 
@@ -31,7 +37,7 @@
   }
 
   type Info = {
-    value: string;
+    value: Value;
     floats: Record<FloatType, FInfo>;
   };
 
@@ -59,13 +65,13 @@
   function toggleBit(floatType: FloatType, i: number): void {
     floatInfo![`toggle_bit_${floatType}`](i);
     info = floatInfo!.get_info();
-    numberInput.value = info!.floats[floatType].value;
+    numberInput.value = info!.floats[floatType].value.fraction;
   }
 
   function addToBits(floatType: FloatType, n: number): void {
     floatInfo![`add_to_bits_${floatType}`](n);
     info = floatInfo!.get_info();
-    numberInput.value = info!.floats[floatType].value;
+    numberInput.value = info!.floats[floatType].value.fraction;
   }
 
   function handleKeyPress(e: KeyboardEvent): void {
@@ -123,7 +129,7 @@
 
   {#if info}
     <br />
-    = {info.value}
+    <Values value={info.value} />
 
     {#each FloatTypes as floatType}
       {@const finfo = info.floats[floatType]}
@@ -180,14 +186,10 @@
           {@html formula}
         {/if}
         <br />
-        {#if finfo.error === "0"}
-          =
-        {:else}
-          &approx;
-        {/if}
-        {finfo.value}
+        <Values value={finfo.value} />
         <br />
-        Error &approx; {finfo.error}
+        <h2>Error</h2>
+        <Values value={finfo.error} />
       </section>
     {/each}
   {:else}

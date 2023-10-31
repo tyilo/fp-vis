@@ -1,9 +1,14 @@
 use bitvec::access::BitSafeU8;
 use bitvec::prelude::*;
 use duplicate::duplicate_item;
+use num_integer::Integer;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::marker::PhantomData;
+use std::ops::Add;
+use std::ops::Neg;
+use std::ops::Sub;
 
 use bitvec::slice::BitSlice;
 use funty::Floating;
@@ -79,15 +84,6 @@ impl Mul for Sign {
     }
 }
 
-fn to_bigint_ratio(sign: Sign, v: Ratio<BigUint>) -> Ratio<BigInt> {
-    let (n, d) = v.into();
-    let mut n = n.to_bigint().unwrap();
-    if sign == Sign::Negative {
-        n = -n;
-    }
-    (n, d.to_bigint().unwrap()).into()
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub(crate) enum NaNType {
@@ -150,7 +146,7 @@ impl Display for NaN {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Exact {
     Finite(Sign, Ratio<BigUint>),
     Infinite(Sign),
@@ -177,6 +173,106 @@ impl Display for Exact {
             }
         }
         Ok(())
+    }
+}
+
+fn to_u8(v: &BigUint) -> u8 {
+    let digits = v.to_u32_digits();
+    assert!(digits.len() <= 1);
+    let digit = digits.first().cloned().unwrap_or(0);
+    assert!(digit < 10);
+    digit.try_into().unwrap()
+}
+
+fn calculate_repeating_decimal(v: Ratio<BigUint>) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let ten = 10.to_biguint().unwrap();
+    let (n, d) = v.into();
+
+    let (int, mut n) = n.div_rem(&d);
+    let int_digits = if int.is_zero() {
+        vec![]
+    } else {
+        int.to_radix_be(10)
+    };
+
+    if n.is_zero() {
+        return (int_digits, vec![], vec![]);
+    }
+
+    let mut frac_digits = vec![];
+    let mut rem_to_index = HashMap::new();
+    let mut i = 0;
+
+    n *= &ten;
+    let start_i = loop {
+        let (digit, rem) = n.div_rem(&d);
+        dbg!((&digit, &rem));
+        frac_digits.push(to_u8(&digit));
+
+        if rem.is_zero() {
+            return (int_digits, frac_digits, vec![]);
+        }
+
+        if let Some(j) = rem_to_index.insert(n.clone(), i) {
+            break j;
+        }
+        i += 1;
+        n = rem * &ten;
+    };
+
+    frac_digits.pop();
+
+    let repeat_digits = frac_digits.split_off(start_i);
+
+    (int_digits, frac_digits, repeat_digits)
+}
+
+fn digit_to_char(digit: u8) -> char {
+    (b'0' + digit) as char
+}
+
+fn digits_to_string(digits: &[u8]) -> String {
+    digits.iter().cloned().map(digit_to_char).collect()
+}
+
+fn to_exact_decimal(value: &Ratio<BigUint>) -> String {
+    let (int_digits, frac_digits, repeat_digits) = calculate_repeating_decimal(value.clone());
+
+    let mut result = String::new();
+
+    if int_digits.is_empty() {
+        result.push('0');
+    } else {
+        result.push_str(&format_number(&digits_to_string(&int_digits)));
+    }
+
+    if frac_digits.is_empty() && repeat_digits.is_empty() {
+        return result;
+    }
+    result.push('.');
+    result.push_str(&digits_to_string(&frac_digits));
+
+    result.push_str(r#"<span style="text-decoration: overline">"#);
+    for d in repeat_digits {
+        result.push(digit_to_char(d));
+        //result.push('\u{0305}');
+    }
+    result.push_str("</span>");
+
+    result
+}
+
+impl Exact {
+    pub(crate) fn to_exact_decimal(&self) -> String {
+        match self {
+            Exact::Finite(sign, value) => {
+                let sign_str = if *sign == Sign::Positive { "" } else { "-" };
+                format!("{}{}", sign_str, to_exact_decimal(value))
+            }
+            Exact::Infinite(Sign::Positive) => "inf".to_string(),
+            Exact::Infinite(Sign::Negative) => "-inf".to_string(),
+            Exact::NaN(nan) => nan.to_string(),
+        }
     }
 }
 
@@ -276,24 +372,57 @@ impl Exact {
             (n.to_biguint().unwrap(), d.to_biguint().unwrap()).into(),
         )
     }
+}
 
-    pub(crate) fn error(&self, other: &Self) -> Option<Ratio<BigInt>> {
-        match (self, other) {
-            (Exact::NaN(_), Exact::NaN(_)) => Some(Zero::zero()),
+impl Neg for Exact {
+    type Output = Exact;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Exact::Finite(s, v) => Exact::Finite(s.flip(), v),
+            Exact::Infinite(s) => Exact::Infinite(s.flip()),
+            nan @ Exact::NaN(_) => nan,
+        }
+    }
+}
+
+impl Add for Exact {
+    type Output = Exact;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Exact::NaN(nan1), Exact::NaN(nan2)) => Exact::NaN(nan1.min(nan2)),
+            (nan @ Exact::NaN(_), _) => nan,
+            (_, nan @ Exact::NaN(_)) => nan,
             (Exact::Infinite(s1), Exact::Infinite(s2)) => {
                 if s1 == s2 {
-                    Some(Zero::zero())
+                    Exact::Infinite(s1)
                 } else {
-                    None
+                    Exact::NaN(NaN::default())
                 }
             }
+            (Exact::Infinite(s), Exact::Finite(_, _)) => Exact::Infinite(s),
+            (Exact::Finite(_, _), Exact::Infinite(s)) => Exact::Infinite(s),
             (Exact::Finite(s1, v1), Exact::Finite(s2, v2)) => {
-                let r1 = to_bigint_ratio(*s1, v1.clone());
-                let r2 = to_bigint_ratio(*s2, v2.clone());
-                Some(r2 - r1)
+                if s1 == s2 {
+                    return Exact::Finite(s1, v1 + v2);
+                }
+
+                if v1 >= v2 {
+                    Exact::Finite(s1, v1 - v2)
+                } else {
+                    Exact::Finite(s2, v2 - v1)
+                }
             }
-            _ => None,
         }
+    }
+}
+
+impl Sub for Exact {
+    type Output = Exact;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self + -rhs
     }
 }
 
@@ -747,5 +876,71 @@ mod test {
         assert_eq!(format_number("12345"), "12,345");
         assert_eq!(format_number("123456"), "123,456");
         assert_eq!(format_number("1234567"), "1,234,567");
+    }
+
+    fn test_repeated_decimal((n, d): (u64, u64), expected: (Vec<u8>, Vec<u8>, Vec<u8>)) {
+        assert_eq!(
+            calculate_repeating_decimal(Ratio::new(
+                n.to_biguint().unwrap(),
+                d.to_biguint().unwrap()
+            )),
+            expected
+        );
+    }
+
+    #[test]
+    fn test_repeated_decimal_zero() {
+        test_repeated_decimal((0, 1), (vec![], vec![], vec![]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_one() {
+        test_repeated_decimal((1, 1), (vec![1], vec![], vec![]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_one_8th() {
+        test_repeated_decimal((1, 8), (vec![], vec![1, 2, 5], vec![]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_one_third() {
+        test_repeated_decimal((1, 3), (vec![], vec![], vec![3]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_one_30th() {
+        test_repeated_decimal((1, 30), (vec![], vec![0], vec![3]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_100_over_3() {
+        test_repeated_decimal((100, 3), (vec![3, 3], vec![], vec![3]));
+    }
+
+    #[test]
+    fn test_repeated_decimal_one_19th() {
+        assert_eq!(
+            calculate_repeating_decimal(Ratio::new(
+                1.to_biguint().unwrap(),
+                19.to_biguint().unwrap()
+            )),
+            (
+                vec![],
+                vec![],
+                vec![0, 5, 2, 6, 3, 1, 5, 7, 8, 9, 4, 7, 3, 6, 8, 4, 2, 1]
+            )
+        );
+    }
+
+    #[test]
+    fn test_repeated_decimal_7_over_12() {
+        assert_eq!(
+            calculate_repeating_decimal(Ratio::new(
+                7.to_biguint().unwrap(),
+                12.to_biguint().unwrap()
+            )),
+            (vec![], vec![5, 8], vec![3],)
+        );
     }
 }
