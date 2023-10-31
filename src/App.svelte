@@ -60,6 +60,7 @@
     }
     floatInfo = newFloatInfo;
     info = floatInfo!.get_info();
+    window.location.hash = numberInput.value;
   }
 
   function toggleBit(floatType: FloatType, i: number): void {
@@ -116,7 +117,7 @@
   }
 
   onMount(async () => {
-    numberInput.value = "1.3";
+    numberInput.value = decodeURIComponent(window.location.hash.substring(1)) || "1 / 3";
     await init();
     updateInfo();
   });
