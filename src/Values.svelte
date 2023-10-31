@@ -8,10 +8,10 @@
 </script>
 
 <div class="values">
-  = {@html value.decimal}
+  =&nbsp;{@html value.decimal}
   {#if value.fraction.includes("/")}
     <br />
-    = {value.fraction}
+    =&nbsp;{value.fraction}
   {/if}
 </div>
 
@@ -19,5 +19,8 @@
   .values {
     display: inline-block;
     text-align: left;
+    overflow-wrap: anywhere;
+    margin-left: 100px;
+    margin-right: 100px;
   }
 </style>

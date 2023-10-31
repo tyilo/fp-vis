@@ -202,7 +202,6 @@
 
   main {
     line-height: 2em;
-    overflow-wrap: break-word;
   }
 
   section {
