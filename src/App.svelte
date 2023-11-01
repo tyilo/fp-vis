@@ -60,25 +60,30 @@
     }
     floatInfo = newFloatInfo;
     info = floatInfo!.get_info();
-    window.location.hash = numberInput.value;
+  }
+
+  function setInput(value: string) {
+    numberInput.value = value;
+    window.location.hash = value;
   }
 
   function toggleBit(floatType: FloatType, i: number): void {
     floatInfo![`toggle_bit_${floatType}`](i);
     info = floatInfo!.get_info();
-    numberInput.value = info!.floats[floatType].value.fraction;
+    setInput(info!.floats[floatType].value.fraction);
   }
 
   function addToBits(floatType: FloatType, n: number): void {
     floatInfo![`add_to_bits_${floatType}`](n);
     info = floatInfo!.get_info();
-    numberInput.value = info!.floats[floatType].value.fraction;
+    setInput(info!.floats[floatType].value.fraction);
   }
 
   function handleKeyPress(e: KeyboardEvent): void {
     if (e.key === "Enter") {
       e.preventDefault();
       updateInfo();
+      window.location.hash = numberInput.value;
     }
   }
 
@@ -126,7 +131,7 @@
     updateInfo();
 
     window.addEventListener("hashchange", () => {
-      numberInput.value = getHash();
+      setInput(getHash());
       updateInfo();
     });
   });
