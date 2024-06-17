@@ -213,8 +213,6 @@
 </main>
 
 <style>
-  @import "katex/dist/katex.min.css";
-
   main {
     line-height: 2em;
   }
