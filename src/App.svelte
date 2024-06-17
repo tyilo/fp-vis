@@ -29,6 +29,7 @@
     category: string;
     error: Value;
     parts: Record<BitType, FloatPart>;
+    nearby_floats: [number, Value][]
   };
 
   enum FloatType {
@@ -152,6 +153,14 @@
       <section>
         <h1>{floatType}</h1>
         <p>{finfo.hex}</p>
+        <svg width="100%" height="30">
+          <line x1="50%" y1="0" x2="50%" y2="30" style="stroke: blue; stroke-width: 3;" />
+          {#each finfo.nearby_floats as nb}
+            {@const x = nb[0] * 0.99 * 50 + 50 + "%"}
+            {@const color = nb[1].decimal === finfo.value.decimal? "black": "gray"}
+            <line x1={x} y1="0" x2={x} y2="30" style="stroke: {color}; stroke-width: 3;" />
+          {/each}
+        </svg>
         <table>
           <thead>
             <tr>

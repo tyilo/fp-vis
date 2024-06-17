@@ -66,6 +66,7 @@ struct FInfo {
     category: String,
     error: Value,
     parts: FloatParts,
+    nearby_floats: Vec<(f64, Value)>,
 }
 
 impl FInfo {
@@ -73,12 +74,19 @@ impl FInfo {
         let v_exact = Exact::from_float(v);
         let error = v_exact.clone() - exact.clone();
 
+        let nearby_floats = exact
+            .nearby_floats::<F>()
+            .into_iter()
+            .map(|(f, v)| (f, (&v).into()))
+            .collect();
+
         Self {
             hex: format!("0x{:0width$x}", v.to_bits(), width = F::BITS / 4),
             value: (&v_exact).into(),
             category: format!("{:?}", Floating::classify(v)),
             error: (&error).into(),
             parts: FloatParts::from_float(v),
+            nearby_floats,
         }
     }
 }

@@ -1,6 +1,7 @@
 use bitvec::access::BitSafeU8;
 use bitvec::prelude::*;
 use duplicate::duplicate_item;
+use funty::Integral;
 use num_integer::Integer;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -348,6 +349,58 @@ impl Exact {
         }
     }
 
+    pub(crate) fn nearby_floats<F: FloatingExt + FloatCore + Display>(&self) -> Vec<(f64, Exact)> {
+        match self {
+            Exact::Finite(_, _) => {
+                let v: F = self.to_float();
+                if !Floating::is_finite(v) {
+                    return vec![];
+                }
+
+                let mut floats = vec![];
+                {
+                    let mut v = v;
+                    for _ in 0..2 {
+                        if !Floating::is_finite(v) {
+                            break;
+                        }
+                        v = v.prev();
+                        floats.push(Exact::from_float(v));
+                    }
+                    floats.reverse();
+                }
+
+                floats.push(Exact::from_float(v));
+
+                {
+                    let mut v = v;
+                    for _ in 0..2 {
+                        if !Floating::is_finite(v) {
+                            break;
+                        }
+                        v = v.next();
+                        floats.push(Exact::from_float(v));
+                    }
+                }
+
+                let d_neg = self.clone() - floats[0].clone();
+                let d_pos = floats.last().unwrap().clone() - self.clone();
+
+                let d_max = match d_neg.partial_cmp(&d_pos).unwrap() {
+                    Ordering::Less | Ordering::Equal => d_pos,
+                    Ordering::Greater => d_neg,
+                };
+                floats.into_iter().map(|v| {
+                    (((v.clone() - self.clone()) / d_max.clone()).to_float(), v)
+                }).collect()
+            }
+            Exact::Infinite(_sign) => {
+                vec![]
+            }
+            Exact::NaN(_) => vec![],
+        }
+    }
+
     pub(crate) fn from_float<F: FloatingExt + FloatCore>(v: F) -> Self {
         let sign = Floating::signum(v);
         if Floating::is_nan(sign) {
@@ -443,6 +496,47 @@ impl Div for Exact {
                     (true, true) => Exact::NaN(NaN::default()),
                     (false, true) => Exact::Infinite(s1 * s2),
                     _ => Exact::Finite(s1 * s2, v1 / v2),
+                }
+            }
+        }
+    }
+}
+
+impl PartialOrd for Exact {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Exact::NaN(_), _) => None,
+            (_, Exact::NaN(_)) => None,
+            (Exact::Infinite(s1), Exact::Infinite(s2)) => Some(s1.cmp(s2)),
+            (Exact::Infinite(s1), Exact::Finite(_, _)) => {
+                if s1 == &Sign::Positive {
+                    Some(Ordering::Greater)
+                } else {
+                    Some(Ordering::Less)
+                }
+            }
+            (Exact::Finite(_, _), Exact::Infinite(s1)) => {
+                if s1 == &Sign::Positive {
+                    Some(Ordering::Less)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+            (Exact::Finite(s1, v1), Exact::Finite(s2, v2)) => {
+                if v1.is_zero() && v2.is_zero() {
+                    return Some(Ordering::Equal);
+                }
+
+                match s1.cmp(s2) {
+                    Ordering::Equal => {
+                        let mut r = v1.cmp(v2);
+                        if s1 == &Sign::Negative {
+                            r = r.reverse();
+                        }
+                        Some(r)
+                    },
+                    Ordering::Less => Some(Ordering::Less),
+                    Ordering::Greater => Some(Ordering::Greater),
                 }
             }
         }
@@ -716,6 +810,18 @@ pub(crate) trait FloatingExt: Floating {
 
         Some(NaN::new(sign, typ, payload).unwrap())
     }
+
+    fn prev(self) -> Self {
+        let bits = self.to_bits();
+        let bits = bits.wrapping_sub(Self::Raw::ONE);
+        Self::from_bits(bits)
+    }
+
+    fn next(self) -> Self {
+        let bits = self.to_bits();
+        let bits = bits.wrapping_add(Self::Raw::ONE);
+        Self::from_bits(bits)
+    }
 }
 
 impl FloatingExt for f64 {
@@ -813,6 +919,42 @@ mod test {
         test_parse_ok("10.02", (1002, 100));
         test_parse_ok("1.002", (1002, 1000));
         test_parse_ok("100.2", (1002, 10));
+    }
+
+    fn cmp_float(v1: f64, v2: f64) -> Option<Ordering> {
+        Exact::from_float(v1).partial_cmp(&Exact::from_float(v2))
+    }
+
+    #[test]
+    fn test_exact_ord_zero() {
+        for v1 in [-0.0, 0.0] {
+            for v2 in [-0.0, 0.0] {
+                assert_eq!(cmp_float(v1, v2), Some(Ordering::Equal));
+            }
+        }
+    }
+
+    #[test]
+    fn test_exact_ord() {
+        let sorted = [
+            -f64::INFINITY,
+            -f64::MAX,
+            -1.0,
+            -f64::MIN_POSITIVE,
+            -f64::from_bits(1),
+            0.0,
+            f64::from_bits(1),
+            f64::MIN_POSITIVE,
+            1.0,
+            f64::MAX,
+            f64::INFINITY
+        ];
+
+        for (i1, v1) in sorted.iter().enumerate() {
+            for (i2, v2) in sorted.iter().enumerate() {
+                assert_eq!(v1.partial_cmp(v2), Some(i1.cmp(&i2)));
+            }
+        }
     }
 
     #[test]
