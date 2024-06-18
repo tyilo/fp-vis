@@ -63,8 +63,10 @@
     info = floatInfo!.get_info();
   }
 
+  let ignoreNextHashChange = false;
   function setInput(value: string) {
     numberInput.value = value;
+    ignoreNextHashChange = true;
     window.location.hash = value;
   }
 
@@ -126,15 +128,21 @@
     return decodeURIComponent(window.location.hash.substring(1));
   }
 
+  function onHashChange(): void {
+    if (ignoreNextHashChange) {
+      ignoreNextHashChange = false;
+      return;
+    }
+    setInput(getHash());
+    updateInfo();
+  }
+
   onMount(async () => {
     numberInput.value = getHash() || "1 / 3";
     await init();
     updateInfo();
 
-    window.addEventListener("hashchange", () => {
-      setInput(getHash());
-      updateInfo();
-    });
+    window.addEventListener("hashchange", onHashChange);
   });
 
   $: console.log(info);

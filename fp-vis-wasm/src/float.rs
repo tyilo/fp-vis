@@ -634,6 +634,13 @@ impl TryFrom<&[u8]> for Exact {
     type Error = ParseError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let bytes: Vec<u8> = bytes
+            .into_iter()
+            .filter(|&&b| !(b.is_ascii_whitespace() || b == b','))
+            .map(|b| b.to_ascii_lowercase())
+            .collect();
+        let bytes = bytes.as_slice();
+
         let (before_slash, after_slash) =
             split_1_or_2(bytes, b'/').map_err(|_| ParseError::TooManySlashes)?;
 
@@ -660,6 +667,16 @@ impl TryFrom<&[u8]> for Exact {
         match rem {
             b"inf" | b"infinity" => return Ok(Self::Infinite(sign)),
             b"nan" => return Ok(Self::NaN(NaN::default())),
+            b"nan(quiet)" => {
+                return Ok(Self::NaN(
+                    NaN::new(Sign::Positive, NaNType::Quiet, 0).unwrap(),
+                ))
+            }
+            b"nan(signaling)" => {
+                return Ok(Self::NaN(
+                    NaN::new(Sign::Positive, NaNType::Signaling, 1).unwrap(),
+                ))
+            }
             _ => (),
         }
 
@@ -712,9 +729,6 @@ impl FromStr for Exact {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s
-            .replace(|c: char| c.is_whitespace() || c == ',', "")
-            .to_ascii_lowercase();
         s.as_bytes().try_into()
     }
 }
@@ -865,6 +879,11 @@ mod test {
     #[test]
     fn test_nan() {
         test_parse_ok("nan", Exact::NaN(super::NaN::default()));
+        test_parse_ok("nan (quiet)", Exact::NaN(super::NaN::default()));
+        test_parse_ok(
+            "nan (signaling)",
+            Exact::NaN(super::NaN::new(Sign::Positive, NaNType::Signaling, 1).unwrap()),
+        );
     }
 
     #[test]
