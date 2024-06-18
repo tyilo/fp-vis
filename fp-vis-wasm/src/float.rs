@@ -757,7 +757,7 @@ impl<F: FloatingExt> FloatBits<F> {
     }
 }
 
-pub(crate) trait FloatingExt: Floating {
+pub(crate) trait FloatingExt: Floating + FloatCore {
     fn to_boxed_be_bytes(self) -> Box<[u8]>;
 
     const BITS: usize = std::mem::size_of::<Self>() * 8;
@@ -811,13 +811,23 @@ pub(crate) trait FloatingExt: Floating {
         Some(NaN::new(sign, typ, payload).unwrap())
     }
 
+    fn min_positive_subnormal() -> Self {
+        Self::from_bits(Self::Raw::ONE)
+    }
+
     fn prev(self) -> Self {
+        if self == Zero::zero() {
+            return -Self::min_positive_subnormal();
+        }
         let bits = self.to_bits();
         let bits = bits.wrapping_sub(Self::Raw::ONE);
         Self::from_bits(bits)
     }
 
     fn next(self) -> Self {
+        if self == Zero::zero() {
+            return Self::min_positive_subnormal();
+        }
         let bits = self.to_bits();
         let bits = bits.wrapping_add(Self::Raw::ONE);
         Self::from_bits(bits)
@@ -941,9 +951,9 @@ mod test {
             -f64::MAX,
             -1.0,
             -f64::MIN_POSITIVE,
-            -f64::from_bits(1),
+            -f64::min_positive_subnormal(),
             0.0,
-            f64::from_bits(1),
+            f64::min_positive_subnormal(),
             f64::MIN_POSITIVE,
             1.0,
             f64::MAX,
@@ -955,6 +965,14 @@ mod test {
                 assert_eq!(v1.partial_cmp(v2), Some(i1.cmp(&i2)));
             }
         }
+    }
+
+    #[test]
+    fn test_prev_next() {
+        assert_eq!(0.0f64.prev(), -f64::min_positive_subnormal());
+        assert_eq!(0.0f64.next(), f64::min_positive_subnormal());
+        assert_eq!((-0.0f64).prev(), -f64::min_positive_subnormal());
+        assert_eq!((-0.0f64).next(), f64::min_positive_subnormal());
     }
 
     #[test]
