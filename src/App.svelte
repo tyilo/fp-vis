@@ -184,9 +184,11 @@ $: console.log(info);
 			{@const formula = getFormula(finfo)}
 			<section>
 				<h1>{floatType}</h1>
-				{#each constants![floatType] as constant}
-					<button type="button" on:click={() => setFloat(floatType, constant.value)}>{constant.name}</button>
-				{/each}
+				{#if constants}
+					{#each constants[floatType] as constant}
+						<button type="button" on:click={() => setFloat(floatType, constant.value)}>{constant.name}</button>
+					{/each}
+				{/if}
 				<p>{finfo.hex}</p>
 				<svg width="100%" height="30">
 					<line x1="50%" y1="0" x2="50%" y2="30" style="stroke: blue; stroke-width: 3;" />
