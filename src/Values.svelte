@@ -1,10 +1,10 @@
 <script lang="ts">
-  type Value = {
-    fraction: string;
-    decimal: string;
-  };
+type Value = {
+	fraction: string;
+	decimal: string;
+};
 
-  export let value: Value;
+export let value: Value;
 </script>
 
 <div class="values">

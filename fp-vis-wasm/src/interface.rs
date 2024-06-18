@@ -1,11 +1,11 @@
-use crate::float::format_number;
-use crate::float::{Exact, FloatBits, FloatingExt};
-use funty::Floating;
 use std::fmt::Display;
 
+use funty::Floating;
 use num_traits::float::FloatCore;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+use crate::float::{format_number, Exact, FloatBits, FloatingExt};
 
 #[derive(Serialize)]
 struct FloatPart {

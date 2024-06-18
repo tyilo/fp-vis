@@ -1,31 +1,24 @@
-use bitvec::access::BitSafeU8;
-use bitvec::prelude::*;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    num::ParseIntError,
+    ops::{Add, Div, Mul, Neg, Sub},
+    str::FromStr,
+};
+
+use bitvec::{
+    access::BitSafeU8,
+    prelude::{BitBox, Msb0, *},
+    slice::BitSlice,
+};
 use duplicate::duplicate_item;
-use funty::Integral;
+use funty::{Floating, Integral};
+use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::fmt::Display;
-use std::marker::PhantomData;
-use std::ops::Add;
-use std::ops::Neg;
-use std::ops::Sub;
-
-use bitvec::slice::BitSlice;
-use funty::Floating;
-use std::num::ParseIntError;
-use std::ops::{Div, Mul};
-use std::str::FromStr;
-
-use std::cmp::Ordering;
-
-use bitvec::prelude::BitBox;
-use bitvec::prelude::Msb0;
-use num_bigint::{BigInt, BigUint};
-use num_bigint::{ToBigInt, ToBigUint};
 use num_rational::Ratio;
-use num_traits::float::FloatCore;
-use num_traits::{One, Signed, Zero};
+use num_traits::{float::FloatCore, One, Signed, Zero};
 
 pub(crate) fn format_number(mut s: &str) -> String {
     if let Some((a, b)) = s.split_once('/') {
@@ -863,9 +856,10 @@ impl FloatingExt for f32 {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use Exact::*;
     use Sign::*;
+
+    use super::*;
 
     fn test_parse_ok<T: Into<Exact>>(s: &str, v: T) {
         assert_eq!(s.parse(), Ok(v.into()));
