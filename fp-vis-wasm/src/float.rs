@@ -390,9 +390,10 @@ impl Exact {
                     Ordering::Less | Ordering::Equal => d_pos,
                     Ordering::Greater => d_neg,
                 };
-                floats.into_iter().map(|v| {
-                    (((v.clone() - self.clone()) / d_max.clone()).to_float(), v)
-                }).collect()
+                floats
+                    .into_iter()
+                    .map(|v| (((v.clone() - self.clone()) / d_max.clone()).to_float(), v))
+                    .collect()
             }
             Exact::Infinite(_sign) => {
                 vec![]
@@ -534,7 +535,7 @@ impl PartialOrd for Exact {
                             r = r.reverse();
                         }
                         Some(r)
-                    },
+                    }
                     Ordering::Less => Some(Ordering::Less),
                     Ordering::Greater => Some(Ordering::Greater),
                 }
@@ -976,7 +977,7 @@ mod test {
             f64::MIN_POSITIVE,
             1.0,
             f64::MAX,
-            f64::INFINITY
+            f64::INFINITY,
         ];
 
         for (i1, v1) in sorted.iter().enumerate() {

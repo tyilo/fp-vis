@@ -103,6 +103,50 @@ struct Info {
     floats: FInfos,
 }
 
+#[derive(Serialize)]
+struct Constant<F> {
+    name: &'static str,
+    value: F,
+}
+
+impl<F: FloatingExt + FloatCore> Constant<F> {
+    fn new(name: &'static str, value: F) -> Self {
+        Self { name, value }
+    }
+}
+
+#[derive(Serialize)]
+struct Constants {
+    f64: Vec<Constant<f64>>,
+    f32: Vec<Constant<f32>>,
+}
+
+impl Constants {
+    pub fn new() -> Self {
+        Self {
+            f64: Self::all_constants(),
+            f32: Self::all_constants(),
+        }
+    }
+
+    fn all_constants<F: FloatingExt + FloatCore>() -> Vec<Constant<F>> {
+        vec![
+            Constant::new("-∞", -F::INFINITY),
+            Constant::new("Min finite", -F::MAX),
+            Constant::new("-1", -F::one()),
+            Constant::new("Max negative normal", -F::MIN_POSITIVE),
+            Constant::new("Max negative", -F::min_positive_subnormal()),
+            Constant::new("-0", -F::zero()),
+            Constant::new("+0", F::zero()),
+            Constant::new("Min positive", F::min_positive_subnormal()),
+            Constant::new("Min positive normal", F::MIN_POSITIVE),
+            Constant::new("1", F::one()),
+            Constant::new("Max finite", -F::MAX),
+            Constant::new("∞", F::INFINITY),
+        ]
+    }
+}
+
 #[wasm_bindgen]
 pub struct FloatInfo {
     exact: Exact,
@@ -133,13 +177,17 @@ impl FloatInfo {
         Ok(serde_wasm_bindgen::to_value(&info)?)
     }
 
-    fn set_f64(&mut self, f64: f64) {
+    pub fn constants(&self) -> Result<JsValue, JsValue> {
+        Ok(serde_wasm_bindgen::to_value(&Constants::new())?)
+    }
+
+    pub fn set_f64(&mut self, f64: f64) {
         self.exact = f64.into();
         self.f64 = f64;
         self.f32 = (&self.exact).into();
     }
 
-    fn set_f32(&mut self, f32: f32) {
+    pub fn set_f32(&mut self, f32: f32) {
         self.exact = f32.into();
         self.f64 = (&self.exact).into();
         self.f32 = f32;

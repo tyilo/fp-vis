@@ -42,11 +42,18 @@
     floats: Record<FloatType, FInfo>;
   };
 
+  type Constant = {
+    name: string,
+    value: number,
+  };
+  type Constants = Record<FloatType, Constant[]>;
+
   const BitTypes = Object.values(BitType);
   const FloatTypes = Object.values(FloatType);
 
   let floatInfo: FloatInfo | undefined = undefined;
   let info: Info | undefined = undefined;
+  let constants: Constants | undefined = undefined;
 
   function updateInfo(): void {
     let newFloatInfo;
@@ -78,6 +85,12 @@
 
   function addToBits(floatType: FloatType, n: number): void {
     floatInfo![`add_to_bits_${floatType}`](n);
+    info = floatInfo!.get_info();
+    setInput(info!.floats[floatType].value.fraction);
+  }
+
+  function setFloat(floatType: FloatType, n: number): void {
+    floatInfo![`set_${floatType}`](n);
     info = floatInfo!.get_info();
     setInput(info!.floats[floatType].value.fraction);
   }
@@ -141,6 +154,7 @@
     numberInput.value = getHash() || "1 / 3";
     await init();
     updateInfo();
+    constants = floatInfo!.constants();
 
     window.addEventListener("hashchange", onHashChange);
   });
@@ -160,6 +174,9 @@
       {@const formula = getFormula(finfo)}
       <section>
         <h1>{floatType}</h1>
+        {#each constants[floatType] as constant}
+          <button type="button" on:click={() => setFloat(floatType, constant.value)}>{constant.name}</button>
+        {/each}
         <p>{finfo.hex}</p>
         <svg width="100%" height="30">
           <line x1="50%" y1="0" x2="50%" y2="30" style="stroke: blue; stroke-width: 3;" />
