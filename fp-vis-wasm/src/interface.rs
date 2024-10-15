@@ -48,6 +48,7 @@ impl FloatParts {
 struct Value {
     fraction: String,
     decimal: String,
+    hex_literal: Option<String>,
 }
 
 impl From<&Exact> for Value {
@@ -55,6 +56,7 @@ impl From<&Exact> for Value {
         Self {
             fraction: value.to_string(),
             decimal: value.to_exact_decimal(),
+            hex_literal: value.to_exact_hex_literal(),
         }
     }
 }

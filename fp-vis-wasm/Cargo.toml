@@ -28,6 +28,7 @@ bitvec = "1.0.1"
 funty = "2.0.0"
 duplicate = "1.0.0"
 num-integer = "0.1.45"
+bstr = "1.9.1"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"

@@ -13,12 +13,13 @@ use bitvec::{
     prelude::{BitBox, Msb0, *},
     slice::BitSlice,
 };
+use bstr::ByteSlice;
 use duplicate::duplicate_item;
 use funty::{Floating, Integral};
 use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_rational::Ratio;
-use num_traits::{float::FloatCore, One, Signed, Zero};
+use num_traits::{float::FloatCore, Num, One, Signed, Zero};
 
 pub(crate) fn format_number(mut s: &str) -> String {
     if let Some((a, b)) = s.split_once('/') {
@@ -61,6 +62,13 @@ impl Sign {
         match self {
             Sign::Positive => Sign::Negative,
             Sign::Negative => Sign::Positive,
+        }
+    }
+
+    fn minus_or_empty(self) -> &'static str {
+        match self {
+            Sign::Positive => "",
+            Sign::Negative => "-",
         }
     }
 }
@@ -266,6 +274,31 @@ impl Exact {
             Exact::Infinite(Sign::Positive) => "inf".to_string(),
             Exact::Infinite(Sign::Negative) => "-inf".to_string(),
             Exact::NaN(nan) => nan.to_string(),
+        }
+    }
+
+    pub(crate) fn to_exact_hex_literal(&self) -> Option<String> {
+        match self {
+            Exact::Finite(sign, value) => {
+                let d = value.denom();
+                if d.count_ones() != 1 {
+                    return None;
+                };
+
+                let num_pow2 = value.numer().trailing_zeros().unwrap_or(0);
+                let num = value.numer() >> num_pow2;
+
+                let log2 = i64::try_from(num_pow2).unwrap()
+                    - i64::try_from(d.trailing_zeros().unwrap()).unwrap();
+
+                Some(format!(
+                    "{sign}0x{num:x}p{log2}",
+                    sign = sign.minus_or_empty(),
+                ))
+            }
+            Exact::Infinite(Sign::Positive) => Some("inf".to_string()),
+            Exact::Infinite(Sign::Negative) => Some("-inf".to_string()),
+            Exact::NaN(nan) => Some(nan.to_string()),
         }
     }
 }
@@ -596,23 +629,134 @@ impl From<Ratio<BigInt>> for Exact {
     }
 }
 
+fn parse_float_literal(bytes: &[u8], radix: u32) -> Result<Ratio<BigUint>, ParseError> {
+    let (before_dot, after_dot) =
+        split_1_or_2(bytes, b'.').map_err(|_| ParseError::TooManyPoints)?;
+    let after_dot = after_dot.unwrap_or(b"");
+
+    if before_dot == b"" && after_dot == b"" {
+        return Err(ParseError::EmptyNumber);
+    }
+
+    fn parse_biguint(mut bytes: &[u8], radix: u32) -> Result<BigUint, ParseError> {
+        if bytes.is_empty() {
+            bytes = b"0";
+        }
+        for b in bytes {
+            if !b.is_ascii_hexdigit() {
+                return Err(ParseError::InvalidDigit(*b));
+            }
+        }
+
+        Ok(BigUint::from_str_radix(bytes.to_str().unwrap(), radix).unwrap())
+    }
+
+    let integer_part = parse_biguint(before_dot, radix)?;
+    let fractional_part = parse_biguint(after_dot, radix)?;
+
+    let denominator = 10u8
+        .to_biguint()
+        .unwrap()
+        .pow(after_dot.len().try_into().unwrap());
+    let numerator = integer_part * &denominator + fractional_part;
+
+    Ok(Ratio::new(numerator, denominator))
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub(crate) enum ParseError {
-    #[error("more than 2 '/' characters encountered")]
+    #[error("more than 1 '/' character encountered")]
     TooManySlashes,
-    #[error("more than 2 e's encountered")]
+    #[error("more than 1 e encountered")]
     TooManyEs,
     #[error("invalid exponent: {0}")]
     InvalidExponent(ParseIntError),
-    #[error("more than 2 '.' characters encountered")]
+    #[error("more than 1 '.' character encountered")]
     TooManyPoints,
     #[error("empty number")]
     EmptyNumber,
     #[error("invalid digit: {0}")]
     InvalidDigit(u8),
+
+    #[error("missing 0x")]
+    Missing0x,
+    #[error("more than 1 '0x' encountered")]
+    TooMany0xs,
+    #[error("missing p")]
+    MissingP,
+    #[error("more than 1 p's encountered")]
+    TooManyPs,
+    #[error("invalid sign: {0}")]
+    InvalidSign(u8),
+
+    #[error("{0}")]
+    ParseIntError(#[from] ParseIntError),
 }
 
 struct TooManySplits;
+
+enum Split2Error {
+    TooFewSplits,
+    TooManySplits,
+}
+
+fn split_2<'a, 'b>(
+    bytes: &'a [u8],
+    split_by: &'b [u8],
+) -> Result<(&'a [u8], &'a [u8]), Split2Error> {
+    let mut split = bytes.split_str(split_by);
+    let res = (
+        split.next().ok_or(Split2Error::TooFewSplits)?,
+        split.next().ok_or(Split2Error::TooFewSplits)?,
+    );
+    if split.next().is_some() {
+        return Err(Split2Error::TooManySplits);
+    }
+    Ok(res)
+}
+
+fn i64_from_bytes(bytes: &[u8]) -> Result<i64, ParseError> {
+    for b in bytes {
+        if !b.is_ascii() {
+            return Err(ParseError::InvalidDigit(*b));
+        }
+    }
+
+    Ok(i64::from_str(bytes.to_str().unwrap())?)
+}
+
+impl Exact {
+    fn try_from_hex_literal(bytes: &[u8]) -> Result<Self, ParseError> {
+        let (before_x, after_x) = match split_2(bytes, b"0x") {
+            Ok(v) => v,
+            Err(Split2Error::TooFewSplits) => return Err(ParseError::Missing0x),
+            Err(Split2Error::TooManySplits) => return Err(ParseError::TooMany0xs),
+        };
+        let (before_p, after_p) = match split_2(after_x, b"p") {
+            Ok(v) => v,
+            Err(Split2Error::TooFewSplits) => return Err(ParseError::MissingP),
+            Err(Split2Error::TooManySplits) => return Err(ParseError::TooManyPs),
+        };
+
+        let sign = match before_x {
+            b"" | b"+" => Sign::Positive,
+            b"-" => Sign::Negative,
+            _ => return Err(ParseError::InvalidSign(before_x[0])),
+        };
+        let mut value = parse_float_literal(before_p, 16)?;
+
+        let log2 = i64_from_bytes(after_p)?;
+        let mut abs_p = BigUint::zero();
+        abs_p.set_bit(log2.abs_diff(0), true);
+        let mut exp: Ratio<BigUint> = abs_p.into();
+        if log2 < 0 {
+            exp = exp.recip();
+        }
+        value *= exp;
+
+        Ok(Exact::Finite(sign, value))
+    }
+}
 
 fn split_1_or_2(bytes: &[u8], split_by: u8) -> Result<(&[u8], Option<&[u8]>), TooManySplits> {
     let mut split = bytes.split(|b| b == &split_by).fuse();
@@ -643,6 +787,10 @@ impl TryFrom<&[u8]> for Exact {
             let d: Self = after_slash.try_into()?;
             return Ok(n / d);
         }
+
+        if let Ok(v) = Exact::try_from_hex_literal(bytes) {
+            return Ok(v);
+        };
 
         let mut rem = bytes;
 
@@ -682,37 +830,7 @@ impl TryFrom<&[u8]> for Exact {
             .parse()
             .map_err(ParseError::InvalidExponent)?;
 
-        let (before_dot, after_dot) =
-            split_1_or_2(before_e, b'.').map_err(|_| ParseError::TooManyPoints)?;
-        let after_dot = after_dot.unwrap_or(b"");
-
-        if before_dot == b"" && after_dot == b"" {
-            return Err(ParseError::EmptyNumber);
-        }
-
-        fn parse_biguint(mut bytes: &[u8]) -> Result<BigUint, ParseError> {
-            if bytes.is_empty() {
-                bytes = b"0";
-            }
-            for b in bytes {
-                if !b.is_ascii_digit() {
-                    return Err(ParseError::InvalidDigit(*b));
-                }
-            }
-
-            Ok(BigUint::from_str(&String::from_utf8(bytes.to_vec()).unwrap()).unwrap())
-        }
-
-        let integer_part = parse_biguint(before_dot)?;
-        let fractional_part = parse_biguint(after_dot)?;
-
-        let denominator = 10u8
-            .to_biguint()
-            .unwrap()
-            .pow(after_dot.len().try_into().unwrap());
-        let numerator = integer_part * &denominator + fractional_part;
-
-        let mut rat = Ratio::new(numerator, denominator);
+        let mut rat = parse_float_literal(before_e, 10)?;
         rat *= Ratio::from(10u8.to_biguint().unwrap()).pow(exp);
 
         Ok(Self::Finite(sign, rat))
@@ -839,6 +957,19 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
         let bits = self.to_bits();
         let bits = bits.wrapping_add(Self::Raw::ONE);
         Self::from_bits(bits)
+    }
+
+    fn to_hex_literal(self) -> String {
+        let (mut mantissa, mut exponent, sign) = self.integer_decode();
+        let mantissa_pow2 = mantissa.trailing_zeros();
+        mantissa >>= mantissa_pow2;
+        exponent += i16::try_from(mantissa_pow2).unwrap();
+        let sign_str = match sign {
+            1 => "",
+            -1 => "-",
+            _ => unreachable!(),
+        };
+        format!("{sign_str}0x{mantissa:x}p{exponent}")
     }
 }
 
@@ -1116,5 +1247,37 @@ mod test {
             )),
             (vec![], vec![5, 8], vec![3],)
         );
+    }
+
+    fn test_hex_roundtrip(input: &str, expected_output: &str) {
+        let v = Exact::try_from_hex_literal(input.as_bytes()).unwrap();
+        dbg!(&v);
+        let output = v.to_exact_hex_literal().unwrap();
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_hex_0x0p0() {
+        test_hex_roundtrip("0x0p0", "0x0p0");
+    }
+
+    #[test]
+    fn test_hex_0xap0() {
+        test_hex_roundtrip("0xap0", "0x5p1");
+    }
+
+    #[test]
+    fn test_hex_0xap_1() {
+        test_hex_roundtrip("0xap-1", "0x5p0");
+    }
+
+    #[test]
+    fn test_hex_0x1p10() {
+        test_hex_roundtrip("0x1p10", "0x1p10");
+    }
+
+    #[test]
+    fn test_hex_0x1p_1() {
+        test_hex_roundtrip("0x1p-1", "0x1p-1");
     }
 }
