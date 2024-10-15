@@ -955,7 +955,11 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
             return -Self::min_positive_subnormal();
         }
         let bits = self.to_bits();
-        let bits = bits.wrapping_add(Self::Raw::ONE);
+        let bits = if Floating::is_sign_positive(self) {
+            bits.wrapping_sub(Self::Raw::ONE)
+        } else {
+            bits.wrapping_add(Self::Raw::ONE)
+        };
         Self::from_bits(bits)
     }
 
@@ -964,7 +968,11 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
             return Self::min_positive_subnormal();
         }
         let bits = self.to_bits();
-        let bits = bits.wrapping_add(Self::Raw::ONE);
+        let bits = if Floating::is_sign_positive(self) {
+            bits.wrapping_add(Self::Raw::ONE)
+        } else {
+            bits.wrapping_sub(Self::Raw::ONE)
+        };
         Self::from_bits(bits)
     }
 
@@ -1129,20 +1137,90 @@ mod test {
         assert_eq!((-0.0f64).next(), f64::min_positive_subnormal());
     }
 
-    #[test]
-    fn test_prev_monotone() {
-        let mut v = 0.0;
+    fn test_prev_monotone<F: FloatingExt>(start: F) {
+        let mut v = start;
         for _ in 0..100 {
+            assert!(v.prev() < v, "v={v}, prev={}", v.prev());
+            v = v.prev();
+        }
+    }
+
+    fn test_next_monotone<F: FloatingExt>(start: F) {
+        let mut v = start;
+        for _ in 0..100 {
+            assert!(v.next() > v, "v={v}, next={}", v.next());
+            v = v.next();
+        }
+    }
+
+    #[test]
+    fn test_prev_monotone_zero() {
+        test_prev_monotone(0.0);
+    }
+
+    #[test]
+    fn test_prev_monotone_neg_zero() {
+        test_prev_monotone(-0.0);
+    }
+
+    #[test]
+    fn test_prev_monotone_one() {
+        test_prev_monotone(1.0);
+    }
+
+    #[test]
+    fn test_prev_monotone_neg_one() {
+        test_prev_monotone(-1.0);
+    }
+
+    #[test]
+    fn test_prev_monotone_max() {
+        test_prev_monotone(f64::MAX);
+    }
+
+    #[test]
+    fn test_next_monotone_zero() {
+        test_next_monotone(0.0);
+    }
+
+    #[test]
+    fn test_next_monotone_neg_zero() {
+        test_next_monotone(-0.0);
+    }
+
+    #[test]
+    fn test_next_monotone_one() {
+        test_next_monotone(1.0);
+    }
+
+    #[test]
+    fn test_next_monotone_neg_one() {
+        test_next_monotone(-1.0);
+    }
+
+    #[test]
+    fn test_next_monotone_min() {
+        test_next_monotone(f64::MIN);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_f32_prev_all() {
+        let mut v = f32::MAX;
+        while v != f32::MIN {
             assert!(v.prev() < v);
+            assert!(v.is_finite());
             v = v.prev();
         }
     }
 
     #[test]
-    fn test_next_monotone() {
-        let mut v = 0.0;
-        for _ in 0..100 {
+    #[ignore]
+    fn test_f32_next_all() {
+        let mut v = f32::MIN;
+        while v != f32::MAX {
             assert!(v.next() > v);
+            assert!(v.is_finite());
             v = v.next();
         }
     }
