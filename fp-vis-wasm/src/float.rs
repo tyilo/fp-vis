@@ -946,7 +946,7 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
             return -Self::min_positive_subnormal();
         }
         let bits = self.to_bits();
-        let bits = bits.wrapping_sub(Self::Raw::ONE);
+        let bits = bits.wrapping_add(Self::Raw::ONE);
         Self::from_bits(bits)
     }
 
@@ -1121,6 +1121,24 @@ mod test {
     }
 
     #[test]
+    fn test_prev_monotone() {
+        let mut v = 0.0;
+        for _ in 0..100 {
+            assert!(v.prev() < v);
+            v = v.prev();
+        }
+    }
+
+    #[test]
+    fn test_next_monotone() {
+        let mut v = 0.0;
+        for _ in 0..100 {
+            assert!(v.next() > v);
+            v = v.next();
+        }
+    }
+
+    #[test]
     fn test_to_f64_1() {
         let v: Exact = "1.0".parse().unwrap();
         let x: f64 = (&v).into();
@@ -1279,5 +1297,21 @@ mod test {
     #[test]
     fn test_hex_0x1p_1() {
         test_hex_roundtrip("0x1p-1", "0x1p-1");
+    }
+
+    #[test]
+    fn test_nearby_zero() {
+        let nearby = Exact::from_float(0.0).nearby_floats::<f64>();
+        for (f, _) in nearby {
+            assert!(f.abs() <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_nearby_neg_zero() {
+        let nearby = Exact::from_float(-0.0).nearby_floats::<f64>();
+        for (f, _) in nearby.iter() {
+            assert!(f.abs() <= 1.0, "{nearby:#?}");
+        }
     }
 }
