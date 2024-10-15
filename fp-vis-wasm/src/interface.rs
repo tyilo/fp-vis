@@ -143,7 +143,7 @@ impl Constants {
             Constant::new("Min positive", F::min_positive_subnormal()),
             Constant::new("Min positive normal", F::MIN_POSITIVE),
             Constant::new("1", F::one()),
-            Constant::new("Max finite", -F::MAX),
+            Constant::new("Max finite", F::MAX),
             Constant::new("∞", F::INFINITY),
         ]
     }
