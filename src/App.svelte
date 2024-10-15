@@ -183,8 +183,8 @@ $: console.log(info);
 		{#each FloatTypes as floatType}
 			{@const finfo = info.floats[floatType]}
 			{@const formula = getFormula(finfo)}
-			<section>
-				<h1>{floatType}</h1>
+			<details open>
+				<summary>{floatType}</summary>
 				{#if constants}
 					{#each constants[floatType] as constant}
 						<button type="button" on:click={() => setFloat(floatType, constant.value)}>{constant.name}</button>
@@ -252,7 +252,7 @@ $: console.log(info);
 				<br />
 				<h2>Error</h2>
 				<Values value={finfo.error} />
-			</section>
+			</details>
 		{/each}
 	{:else}
 		Error/Loading (WebAssembly is required)
@@ -264,15 +264,16 @@ $: console.log(info);
 		line-height: 2em;
 	}
 
-	section {
+	details {
 		border-style: solid;
 		border-width: 1px;
 		margin: 1em;
 		padding: 1em;
 	}
 
-	h1 {
-		margin-top: 0;
+	summary {
+		display: block;
+		font-size: 1.5em;
 	}
 
 	table {
