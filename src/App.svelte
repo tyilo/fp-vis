@@ -21,6 +21,7 @@ type FloatPart = {
 type Value = {
 	fraction: string;
 	decimal: string;
+	hex_literal: string;
 };
 
 type FInfo = {
@@ -86,7 +87,7 @@ function setInput(value: string) {
 
 function toggleBit(floatType: FloatType, i: number): void {
 	currentFloatInfo()[`toggle_bit_${floatType}`](i);
-	const newIinfo = currentFloatInfo().get_info();
+	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);
 }
