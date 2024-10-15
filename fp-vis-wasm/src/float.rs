@@ -709,9 +709,9 @@ enum Split2Error {
     TooManySplits,
 }
 
-fn split_2<'a, 'b>(
+fn split_2<'a>(
     bytes: &'a [u8],
-    split_by: &'b [u8],
+    split_by: &[u8],
 ) -> Result<(&'a [u8], &'a [u8]), Split2Error> {
     let mut split = bytes.split_str(split_by);
     let res = (
@@ -782,7 +782,7 @@ impl TryFrom<&[u8]> for Exact {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let bytes: Vec<u8> = bytes
-            .into_iter()
+            .iter()
             .filter(|&&b| !(b.is_ascii_whitespace() || b == b','))
             .map(|b| b.to_ascii_lowercase())
             .collect();
