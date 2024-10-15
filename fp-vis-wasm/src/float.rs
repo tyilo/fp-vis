@@ -709,10 +709,7 @@ enum Split2Error {
     TooManySplits,
 }
 
-fn split_2<'a>(
-    bytes: &'a [u8],
-    split_by: &[u8],
-) -> Result<(&'a [u8], &'a [u8]), Split2Error> {
+fn split_2<'a>(bytes: &'a [u8], split_by: &[u8]) -> Result<(&'a [u8], &'a [u8]), Split2Error> {
     let mut split = bytes.split_str(split_by);
     let res = (
         split.next().ok_or(Split2Error::TooFewSplits)?,
