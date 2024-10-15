@@ -178,6 +178,15 @@ impl Display for Exact {
     }
 }
 
+impl Exact {
+    pub(crate) fn normalize_zero(self) -> Self {
+        match self {
+            Exact::Finite(_, value) if value.is_zero() => Exact::Finite(Sign::Positive, value),
+            v => v,
+        }
+    }
+}
+
 fn to_u8(v: &BigUint) -> u8 {
     let digits = v.to_u32_digits();
     assert!(digits.len() <= 1);

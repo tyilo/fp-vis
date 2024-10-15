@@ -74,7 +74,7 @@ struct FInfo {
 impl FInfo {
     fn new<F: FloatingExt + FloatCore + Display>(exact: &Exact, v: F) -> Self {
         let v_exact = Exact::from_float(v);
-        let error = v_exact.clone() - exact.clone();
+        let error = (v_exact.clone() - exact.clone()).normalize_zero();
 
         let nearby_floats = exact
             .nearby_floats::<F>()
