@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use funty::Floating;
 use num_traits::float::FloatCore;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -85,7 +84,7 @@ impl FInfo {
         Self {
             hex: format!("0x{:0width$x}", v.to_bits(), width = F::BITS / 4),
             value: (&v_exact).into(),
-            category: format!("{:?}", Floating::classify(v)),
+            category: format!("{:?}", FloatCore::classify(v)),
             error: (&error).into(),
             parts: FloatParts::from_float(v),
             nearby_floats,
@@ -133,18 +132,18 @@ impl Constants {
 
     fn all_constants<F: FloatingExt + FloatCore>() -> Vec<Constant<F>> {
         vec![
-            Constant::new("-∞", -F::INFINITY),
-            Constant::new("Min finite", -F::MAX),
+            Constant::new("-∞", -F::infinity()),
+            Constant::new("Min finite", -F::max_value()),
             Constant::new("-1", -F::one()),
-            Constant::new("Max negative normal", -F::MIN_POSITIVE),
+            Constant::new("Max negative normal", -F::min_positive_value()),
             Constant::new("Max negative", -F::min_positive_subnormal()),
             Constant::new("-0", -F::zero()),
             Constant::new("+0", F::zero()),
             Constant::new("Min positive", F::min_positive_subnormal()),
-            Constant::new("Min positive normal", F::MIN_POSITIVE),
+            Constant::new("Min positive normal", F::min_positive_value()),
             Constant::new("1", F::one()),
-            Constant::new("Max finite", F::MAX),
-            Constant::new("∞", F::INFINITY),
+            Constant::new("Max finite", F::max_value()),
+            Constant::new("∞", F::infinity()),
         ]
     }
 }

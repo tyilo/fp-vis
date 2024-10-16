@@ -15,7 +15,7 @@ use bitvec::{
 };
 use bstr::ByteSlice;
 use duplicate::duplicate_item;
-use funty::{Floating, Integral};
+use funty::Integral;
 use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_rational::Ratio;
@@ -388,7 +388,7 @@ impl Exact {
         match self {
             Exact::Finite(_, _) => {
                 let v: F = self.to_float();
-                if !Floating::is_finite(v) {
+                if !FloatCore::is_finite(v) {
                     return vec![];
                 }
 
@@ -396,7 +396,7 @@ impl Exact {
                 {
                     let mut v = v;
                     for _ in 0..2 {
-                        if !Floating::is_finite(v) {
+                        if !FloatCore::is_finite(v) {
                             break;
                         }
                         v = v.prev();
@@ -410,7 +410,7 @@ impl Exact {
                 {
                     let mut v = v;
                     for _ in 0..2 {
-                        if !Floating::is_finite(v) {
+                        if !FloatCore::is_finite(v) {
                             break;
                         }
                         v = v.next();
@@ -438,8 +438,8 @@ impl Exact {
     }
 
     pub(crate) fn from_float<F: FloatingExt + FloatCore>(v: F) -> Self {
-        let sign = Floating::signum(v);
-        if Floating::is_nan(sign) {
+        let sign = FloatCore::signum(v);
+        if FloatCore::is_nan(sign) {
             return Self::NaN(v.to_nan().unwrap());
         }
 
@@ -449,7 +449,7 @@ impl Exact {
             Sign::Negative
         };
 
-        if Floating::is_infinite(v) {
+        if FloatCore::is_infinite(v) {
             return Self::Infinite(sign);
         }
 
@@ -889,7 +889,40 @@ impl<F: FloatingExt> FloatBits<F> {
     }
 }
 
-pub(crate) trait FloatingExt: Floating + FloatCore {
+pub trait FloatCoreMissing {
+    const MANTISSA_DIGITS: u32;
+    type Bits: Integral;
+    fn to_bits(self) -> Self::Bits;
+    fn from_bits(bits: Self::Bits) -> Self;
+}
+
+impl FloatCoreMissing for f64 {
+    const MANTISSA_DIGITS: u32 = f64::MANTISSA_DIGITS;
+    type Bits = u64;
+
+    fn to_bits(self) -> Self::Bits {
+        self.to_bits()
+    }
+
+    fn from_bits(bits: Self::Bits) -> Self {
+        Self::from_bits(bits)
+    }
+}
+
+impl FloatCoreMissing for f32 {
+    const MANTISSA_DIGITS: u32 = f32::MANTISSA_DIGITS;
+    type Bits = u32;
+
+    fn to_bits(self) -> Self::Bits {
+        self.to_bits()
+    }
+
+    fn from_bits(bits: Self::Bits) -> Self {
+        Self::from_bits(bits)
+    }
+}
+
+pub(crate) trait FloatingExt: FloatCore + FloatCoreMissing {
     fn to_boxed_be_bytes(self) -> Box<[u8]>;
 
     const BITS: usize = std::mem::size_of::<Self>() * 8;
@@ -944,7 +977,7 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
     }
 
     fn min_positive_subnormal() -> Self {
-        Self::from_bits(Self::Raw::ONE)
+        Self::from_bits(Self::Bits::ONE)
     }
 
     fn prev(self) -> Self {
@@ -952,10 +985,10 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
             return -Self::min_positive_subnormal();
         }
         let bits = self.to_bits();
-        let bits = if Floating::is_sign_positive(self) {
-            bits.wrapping_sub(Self::Raw::ONE)
+        let bits = if FloatCore::is_sign_positive(self) {
+            bits.wrapping_sub(Self::Bits::ONE)
         } else {
-            bits.wrapping_add(Self::Raw::ONE)
+            bits.wrapping_add(Self::Bits::ONE)
         };
         Self::from_bits(bits)
     }
@@ -965,10 +998,10 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
             return Self::min_positive_subnormal();
         }
         let bits = self.to_bits();
-        let bits = if Floating::is_sign_positive(self) {
-            bits.wrapping_add(Self::Raw::ONE)
+        let bits = if FloatCore::is_sign_positive(self) {
+            bits.wrapping_add(Self::Bits::ONE)
         } else {
-            bits.wrapping_sub(Self::Raw::ONE)
+            bits.wrapping_sub(Self::Bits::ONE)
         };
         Self::from_bits(bits)
     }
