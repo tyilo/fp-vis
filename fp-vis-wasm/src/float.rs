@@ -15,11 +15,11 @@ use bitvec::{
 };
 use bstr::ByteSlice;
 use duplicate::duplicate_item;
-use funty::Integral;
 use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_rational::Ratio;
 use num_traits::{float::FloatCore, Num, One, Signed, Zero};
+use std_traits::num::{Float, Integer as _, Number as _, NumberLike};
 
 pub(crate) fn format_number(mut s: &str) -> String {
     if let Some((a, b)) = s.split_once('/') {
@@ -867,13 +867,13 @@ impl<F: FloatingExt> FloatBits<F> {
 
     pub(crate) fn from_float(v: F) -> Self {
         Self {
-            bits: BitBox::from_boxed_slice(v.to_boxed_be_bytes()),
+            bits: BitBox::from_boxed_slice(NumberLike::to_be_bytes(v).into()),
             _phantom: PhantomData,
         }
     }
 
     fn to_float(&self) -> F {
-        F::from_bits(self.bits.load_be())
+        <F as funty::Floating>::from_bits(self.bits.load_be())
     }
 
     #[duplicate_item(
@@ -889,45 +889,10 @@ impl<F: FloatingExt> FloatBits<F> {
     }
 }
 
-pub trait FloatCoreMissing {
-    const MANTISSA_DIGITS: u32;
-    type Bits: Integral;
-    fn to_bits(self) -> Self::Bits;
-    fn from_bits(bits: Self::Bits) -> Self;
-}
-
-impl FloatCoreMissing for f64 {
-    const MANTISSA_DIGITS: u32 = f64::MANTISSA_DIGITS;
-    type Bits = u64;
-
-    fn to_bits(self) -> Self::Bits {
-        self.to_bits()
-    }
-
-    fn from_bits(bits: Self::Bits) -> Self {
-        Self::from_bits(bits)
-    }
-}
-
-impl FloatCoreMissing for f32 {
-    const MANTISSA_DIGITS: u32 = f32::MANTISSA_DIGITS;
-    type Bits = u32;
-
-    fn to_bits(self) -> Self::Bits {
-        self.to_bits()
-    }
-
-    fn from_bits(bits: Self::Bits) -> Self {
-        Self::from_bits(bits)
-    }
-}
-
-pub(crate) trait FloatingExt: FloatCore + FloatCoreMissing {
-    fn to_boxed_be_bytes(self) -> Box<[u8]>;
-
+pub(crate) trait FloatingExt: Float + FloatCore + funty::Floating {
     const BITS: usize = std::mem::size_of::<Self>() * 8;
 
-    const MANTISSA_BITS: usize = Self::MANTISSA_DIGITS as usize - 1;
+    const MANTISSA_BITS: usize = <Self as Float>::MANTISSA_DIGITS as usize - 1;
     const EXPONENT_BITS: usize = Self::BITS - Self::MANTISSA_BITS - 1;
 
     fn specific_nan(sign: Sign, typ: NaNType, payload: u64) -> Self {
@@ -976,34 +941,30 @@ pub(crate) trait FloatingExt: FloatCore + FloatCoreMissing {
         Some(NaN::new(sign, typ, payload).unwrap())
     }
 
-    fn min_positive_subnormal() -> Self {
-        Self::from_bits(Self::Bits::ONE)
-    }
-
     fn prev(self) -> Self {
         if self == Zero::zero() {
-            return -Self::min_positive_subnormal();
+            return Self::MAX_NEGATIVE_SUBNORMAL;
         }
-        let bits = self.to_bits();
-        let bits = if FloatCore::is_sign_positive(self) {
+        let bits = Float::to_bits(self);
+        let bits = if Float::is_sign_positive(self) {
             bits.wrapping_sub(Self::Bits::ONE)
         } else {
             bits.wrapping_add(Self::Bits::ONE)
         };
-        Self::from_bits(bits)
+        <Self as Float>::from_bits(bits)
     }
 
     fn next(self) -> Self {
         if self == Zero::zero() {
-            return Self::min_positive_subnormal();
+            return Self::MIN_POSITIVE_SUBNORMAL;
         }
-        let bits = self.to_bits();
-        let bits = if FloatCore::is_sign_positive(self) {
+        let bits = Float::to_bits(self);
+        let bits = if Float::is_sign_positive(self) {
             bits.wrapping_add(Self::Bits::ONE)
         } else {
             bits.wrapping_sub(Self::Bits::ONE)
         };
-        Self::from_bits(bits)
+        <Self as Float>::from_bits(bits)
     }
 
     fn to_hex_literal(self) -> String {
@@ -1021,15 +982,9 @@ pub(crate) trait FloatingExt: FloatCore + FloatCoreMissing {
 }
 
 impl FloatingExt for f64 {
-    fn to_boxed_be_bytes(self) -> Box<[u8]> {
-        Box::new(self.to_be_bytes())
-    }
 }
 
 impl FloatingExt for f32 {
-    fn to_boxed_be_bytes(self) -> Box<[u8]> {
-        Box::new(self.to_be_bytes())
-    }
 }
 
 #[cfg(test)]
@@ -1142,11 +1097,11 @@ mod test {
             -f64::INFINITY,
             -f64::MAX,
             -1.0,
-            -f64::MIN_POSITIVE,
-            -f64::min_positive_subnormal(),
+            -f64::MIN_POSITIVE_NORMAL,
+            -f64::MIN_POSITIVE_SUBNORMAL,
             0.0,
-            f64::min_positive_subnormal(),
-            f64::MIN_POSITIVE,
+            f64::MIN_POSITIVE_SUBNORMAL,
+            f64::MIN_POSITIVE_NORMAL,
             1.0,
             f64::MAX,
             f64::INFINITY,
@@ -1161,10 +1116,10 @@ mod test {
 
     #[test]
     fn test_prev_next() {
-        assert_eq!(0.0f64.prev(), -f64::min_positive_subnormal());
-        assert_eq!(0.0f64.next(), f64::min_positive_subnormal());
-        assert_eq!((-0.0f64).prev(), -f64::min_positive_subnormal());
-        assert_eq!((-0.0f64).next(), f64::min_positive_subnormal());
+        assert_eq!(0.0f64.prev(), -f64::MIN_POSITIVE_SUBNORMAL);
+        assert_eq!(0.0f64.next(), f64::MIN_POSITIVE_SUBNORMAL);
+        assert_eq!((-0.0f64).prev(), -f64::MIN_POSITIVE_SUBNORMAL);
+        assert_eq!((-0.0f64).next(), f64::MIN_POSITIVE_SUBNORMAL);
     }
 
     fn test_prev_monotone<F: FloatingExt>(start: F) {

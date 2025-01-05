@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use num_traits::float::FloatCore;
 use serde::Serialize;
+use std_traits::num::Float;
 use wasm_bindgen::prelude::*;
 
 use crate::float::{format_number, Exact, FloatBits, FloatingExt};
@@ -82,7 +83,7 @@ impl FInfo {
             .collect();
 
         Self {
-            hex: format!("0x{:0width$x}", v.to_bits(), width = F::BITS / 4),
+            hex: format!("0x{:0width$x}", Float::to_bits(v), width = F::BITS / 4),
             value: (&v_exact).into(),
             category: format!("{:?}", FloatCore::classify(v)),
             error: (&error).into(),
@@ -130,20 +131,20 @@ impl Constants {
         }
     }
 
-    fn all_constants<F: FloatingExt + FloatCore>() -> Vec<Constant<F>> {
+    fn all_constants<F: FloatingExt>() -> Vec<Constant<F>> {
         vec![
-            Constant::new("-∞", -F::infinity()),
-            Constant::new("Min finite", -F::max_value()),
-            Constant::new("-1", -F::one()),
-            Constant::new("Max negative normal", -F::min_positive_value()),
-            Constant::new("Max negative", -F::min_positive_subnormal()),
-            Constant::new("-0", -F::zero()),
-            Constant::new("+0", F::zero()),
-            Constant::new("Min positive", F::min_positive_subnormal()),
-            Constant::new("Min positive normal", F::min_positive_value()),
-            Constant::new("1", F::one()),
-            Constant::new("Max finite", F::max_value()),
-            Constant::new("∞", F::infinity()),
+            Constant::new("-∞", <F as Float>::NEG_INFINITY),
+            Constant::new("Min finite", F::MIN_FINITE),
+            Constant::new("-1", -F::ONE),
+            Constant::new("Max negative normal", F::MAX_NEGATIVE_NORMAL),
+            Constant::new("Max negative", F::MAX_NEGATIVE_SUBNORMAL),
+            Constant::new("-0", F::NEG_ZERO),
+            Constant::new("+0", F::ZERO),
+            Constant::new("Min positive", F::MIN_POSITIVE_SUBNORMAL),
+            Constant::new("Min positive normal", F::MIN_POSITIVE_NORMAL),
+            Constant::new("1", F::ONE),
+            Constant::new("Max finite", F::MAX_FINITE),
+            Constant::new("∞", <F as Float>::INFINITY),
         ]
     }
 }

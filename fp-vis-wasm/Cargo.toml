@@ -29,6 +29,7 @@ funty = "2.0.0"
 duplicate = "2.0.0"
 num-integer = "0.1.45"
 bstr = "1.9.1"
+std-traits = "0.3.0"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
