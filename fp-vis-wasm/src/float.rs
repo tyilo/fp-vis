@@ -336,15 +336,25 @@ fn closest_float<F: FloatCore + Display>(v: &Ratio<BigInt>) -> F {
 
     loop {
         let mid = min + (max - min) / two;
+        #[cfg(debug_assertions)]
         eprintln!("min: {min}, mid: {mid}, max: {max}");
         if mid == min || mid == max {
             let min_rat = Ratio::<BigInt>::from_float(min).unwrap();
             let max_rat = Ratio::<BigInt>::from_float(max).unwrap();
-            if (max_rat - v) < (v - min_rat) {
-                return max;
-            } else {
-                return min;
-            }
+            return match (max_rat - v).cmp(&(v - min_rat)) {
+                Ordering::Equal => {
+                    let (min_mantissa, _, _) = min.integer_decode();
+                    let (max_mantissa, _, _) = max.integer_decode();
+
+                    if min_mantissa.trailing_zeros() > max_mantissa.trailing_zeros() {
+                        min
+                    } else {
+                        max
+                    }
+                }
+                Ordering::Less => max,
+                Ordering::Greater => min,
+            };
         }
         let mid_rat = Ratio::<BigInt>::from_float(mid).unwrap();
         match mid_rat.cmp(v) {
@@ -1001,6 +1011,7 @@ impl FloatingExt for f32 {
 
 #[cfg(test)]
 mod test {
+    use num_traits::FromPrimitive;
     use Exact::*;
     use Sign::*;
 
@@ -1397,5 +1408,37 @@ mod test {
         for (f, _) in nearby.iter() {
             assert!(f.abs() <= 1.0, "{nearby:#?}");
         }
+    }
+
+    #[test]
+    fn test_closest_float_round_even() {
+        let target = 10i64.pow(16);
+        let target_float = target as f64;
+        assert_eq!(target_float as i64, target);
+
+        for sign in [1, -1] {
+            let target_float = (sign as f64) * target_float;
+            for offset in [-1, 1] {
+                let v = sign * target + offset;
+                let v = Ratio::from_integer(v.to_bigint().unwrap());
+                let closest_float: f64 = closest_float(&v);
+                assert_eq!(closest_float, target_float);
+            }
+        }
+    }
+
+    #[test]
+    fn test_closest_float_round_even_subnormal() {
+        let v = Exact::from_str("0x1p-1021").unwrap();
+        let v_float: f64 = v.to_float();
+        assert_eq!(Exact::from(v_float), v);
+
+        let next_float = v_float.next();
+        let next = Exact::from(next_float);
+
+        let middle = (v + next) / Exact::from(2i64);
+
+        let closest: f64 = middle.to_float();
+        assert_eq!(closest, v_float);
     }
 }
