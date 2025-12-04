@@ -19,7 +19,7 @@ use funty::{Floating, Integral};
 use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_rational::Ratio;
-use num_traits::{float::FloatCore, Num, One, Signed, Zero};
+use num_traits::{Num, One, Signed, Zero, float::FloatCore};
 
 pub(crate) fn format_number(mut s: &str) -> String {
     if let Some((a, b)) = s.split_once('/') {
@@ -828,12 +828,12 @@ impl TryFrom<&[u8]> for Exact {
             b"nan(quiet)" => {
                 return Ok(Self::NaN(
                     NaN::new(Sign::Positive, NaNType::Quiet, 0).unwrap(),
-                ))
+                ));
             }
             b"nan(signaling)" => {
                 return Ok(Self::NaN(
                     NaN::new(Sign::Positive, NaNType::Signaling, 1).unwrap(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -982,19 +982,6 @@ pub(crate) trait FloatingExt: Floating + FloatCore {
         };
         Self::from_bits(bits)
     }
-
-    fn to_hex_literal(self) -> String {
-        let (mut mantissa, mut exponent, sign) = self.integer_decode();
-        let mantissa_pow2 = mantissa.trailing_zeros();
-        mantissa >>= mantissa_pow2;
-        exponent += i16::try_from(mantissa_pow2).unwrap();
-        let sign_str = match sign {
-            1 => "",
-            -1 => "-",
-            _ => unreachable!(),
-        };
-        format!("{sign_str}0x{mantissa:x}p{exponent}")
-    }
 }
 
 impl FloatingExt for f64 {
@@ -1011,7 +998,6 @@ impl FloatingExt for f32 {
 
 #[cfg(test)]
 mod test {
-    use num_traits::FromPrimitive;
     use Exact::*;
     use Sign::*;
 

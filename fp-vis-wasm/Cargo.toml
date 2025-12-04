@@ -2,7 +2,7 @@
 name = "fp-vis-wasm"
 version = "0.1.0"
 authors = ["Asger Hautop Drewsen <asger@tyilo.com>"]
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -20,7 +20,7 @@ wasm-bindgen = "0.2.84"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 num-rational = "0.4.1"
 num-bigint = "0.4.4"
-thiserror = "1.0.49"
+thiserror = "2.0.17"
 num-traits = "0.2.17"
 serde-wasm-bindgen = "0.6.0"
 serde = { version = "1.0.189", features = ["derive"] }

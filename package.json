@@ -10,16 +10,16 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json"
 	},
 	"devDependencies": {
-		"@sveltejs/vite-plugin-svelte": "^3.1.2",
-		"@tsconfig/svelte": "^5.0.4",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@tsconfig/svelte": "^5.0.6",
 		"@types/katex": "^0.16.7",
-		"svelte": "^4.2.19",
-		"svelte-check": "^4.0.5",
-		"tslib": "^2.8.0",
-		"typescript": "^5.6.3",
-		"vite": "^5.4.9"
+		"svelte": "^5.45.5",
+		"svelte-check": "^4.3.4",
+		"tslib": "^2.8.1",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.6"
 	},
 	"dependencies": {
-		"katex": "^0.16.11"
+		"katex": "^0.16.25"
 	}
 }

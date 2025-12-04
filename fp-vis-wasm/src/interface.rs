@@ -5,7 +5,7 @@ use num_traits::float::FloatCore;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use crate::float::{format_number, Exact, FloatBits, FloatingExt};
+use crate::float::{Exact, FloatBits, FloatingExt, format_number};
 
 #[derive(Serialize)]
 struct FloatPart {

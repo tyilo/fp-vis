@@ -1,17 +1,13 @@
 <script lang="ts">
+import katex from "katex";
 import { onMount } from "svelte";
 import init, { FloatInfo } from "../fp-vis-wasm/pkg";
 import Values from "./Values.svelte";
 
-import katex from "katex";
-
 let numberInput: HTMLInputElement;
 
-enum BitType {
-	sign = "sign",
-	exponent = "exponent",
-	mantissa = "mantissa",
-}
+const BitType = ["sign", "exponent", "mantissa"] as const;
+type BitType = (typeof BitType)[number];
 
 type FloatPart = {
 	value: string;
@@ -33,10 +29,8 @@ type FInfo = {
 	nearby_floats: [number, Value][];
 };
 
-enum FloatType {
-	f64 = "f64",
-	f32 = "f32",
-}
+const FloatType = ["f64", "f32"];
+type FloatType = (typeof FloatType)[number];
 
 type Info = {
 	value: Value;
@@ -49,12 +43,9 @@ type Constant = {
 };
 type Constants = Record<FloatType, Constant[]>;
 
-const BitTypes = Object.values(BitType);
-const FloatTypes = Object.values(FloatType);
-
-let floatInfo: FloatInfo | undefined = undefined;
-let info: Info | undefined = undefined;
-let constants: Constants | undefined = undefined;
+let floatInfo: FloatInfo | undefined;
+let info: Info | undefined;
+let constants: Constants | undefined;
 
 function currentFloatInfo(): FloatInfo {
 	if (floatInfo !== undefined) {
@@ -116,7 +107,7 @@ function handleKeyPress(e: KeyboardEvent): void {
 
 function* bitIter(info: FInfo) {
 	let i = 0;
-	for (const typ of BitTypes) {
+	for (const typ of BitType) {
 		for (const value of info.parts[typ].bits) {
 			yield {
 				i,
@@ -180,7 +171,7 @@ $: console.log(info);
 		<br />
 		<Values value={info.value} />
 
-		{#each FloatTypes as floatType}
+		{#each FloatType as floatType}
 			{@const finfo = info.floats[floatType]}
 			{@const formula = getFormula(finfo)}
 			<details open>
@@ -202,7 +193,7 @@ $: console.log(info);
 				<table>
 					<thead>
 						<tr>
-							{#each BitTypes as typ}
+							{#each BitType as typ}
 								{@const bits = finfo.parts[typ].bits.length}
 								<th colspan={bits}
 									>{typ}{#if bits > 1}
@@ -234,7 +225,7 @@ $: console.log(info);
 							</td>
 						</tr>
 						<tr>
-							{#each BitTypes as typ}
+							{#each BitType as typ}
 								{@const part = finfo.parts[typ]}
 								<td colspan={part.bits.length}>{part.value}</td>
 							{/each}
