@@ -1,5 +1,6 @@
 use std::{fmt::Display, marker::PhantomData};
 
+use bitvec::{order::Msb0, slice::BitSlice};
 use funty::Floating;
 use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,27 @@ use crate::float::{Exact, FloatBits, FloatingExt, format_number};
 #[derive(Serialize)]
 struct FloatPart {
     bits: Vec<bool>,
+    raw_value: String,
     value: String,
+}
+
+fn bits_to_num(bits: &BitSlice<u8, Msb0>) -> String {
+    let mut v = 0u64;
+    for bit in bits {
+        v *= 2;
+        v += if *bit { 1 } else { 0 };
+    }
+    format_number(&v.to_string())
+}
+
+impl FloatPart {
+    fn new(bits: &BitSlice<u8, Msb0>, value: impl Display) -> Self {
+        Self {
+            bits: bits.iter().by_vals().collect(),
+            raw_value: bits_to_num(bits),
+            value: format_number(&value.to_string()),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -28,18 +49,9 @@ impl FloatParts {
         let (mantissa, exponent, sign) = v.integer_decode();
 
         Self {
-            sign: FloatPart {
-                value: format_number(&sign.to_string()),
-                bits: sign_bit.iter().by_vals().collect(),
-            },
-            exponent: FloatPart {
-                value: format_number(&exponent.to_string()),
-                bits: exponent_bits.iter().by_vals().collect(),
-            },
-            mantissa: FloatPart {
-                value: format_number(&mantissa.to_string()),
-                bits: mantissa_bits.iter().by_vals().collect(),
-            },
+            sign: FloatPart::new(sign_bit, sign),
+            exponent: FloatPart::new(exponent_bits, exponent),
+            mantissa: FloatPart::new(mantissa_bits, mantissa),
         }
     }
 }

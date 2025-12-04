@@ -10,8 +10,9 @@ const BitType = ["sign", "exponent", "mantissa"] as const;
 type BitType = (typeof BitType)[number];
 
 type FloatPart = {
-	value: string;
 	bits: boolean[];
+	raw_value: string;
+	value: string;
 };
 
 type Value = {
@@ -226,6 +227,18 @@ $: console.log(info);
 									>-</button
 								>
 							</td>
+						</tr>
+						<tr>
+							{#each BitType as typ}
+								{@const part = finfo.parts[typ]}
+								<td colspan={part.bits.length}>{part.raw_value}</td>
+							{/each}
+						</tr>
+						<tr>
+							{#each BitType as typ}
+								{@const part = finfo.parts[typ]}
+								<td colspan={part.bits.length}>↓</td>
+							{/each}
 						</tr>
 						<tr>
 							{#each BitType as typ}
