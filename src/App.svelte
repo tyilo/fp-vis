@@ -29,7 +29,7 @@ type FInfo = {
 	nearby_floats: [number, Value][];
 };
 
-const FloatType = ["f64", "f32"];
+const FloatType = ["f64", "f32"] as const;
 type FloatType = (typeof FloatType)[number];
 
 type Info = {
@@ -77,21 +77,21 @@ function setInput(value: string) {
 }
 
 function toggleBit(floatType: FloatType, i: number): void {
-	currentFloatInfo()[`toggle_bit_${floatType}`](i);
+	currentFloatInfo().toggle_bit(floatType, i);
 	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);
 }
 
 function addToBits(floatType: FloatType, n: number): void {
-	currentFloatInfo()[`add_to_bits_${floatType}`](n);
+	currentFloatInfo().add_to_bits(floatType, n);
 	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);
 }
 
 function setFloat(floatType: FloatType, n: number): void {
-	currentFloatInfo()[`set_${floatType}`](n);
+	currentFloatInfo().set_float(floatType, n);
 	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);

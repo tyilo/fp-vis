@@ -118,7 +118,7 @@ impl<F: FloatingExt + FloatCore> Constant<F> {
 }
 
 #[derive(Serialize)]
-struct Constants {
+pub struct Constants {
     f64: Vec<Constant<f64>>,
     f32: Vec<Constant<f32>>,
 }
@@ -157,6 +157,12 @@ pub struct FloatInfo {
 }
 
 #[wasm_bindgen]
+pub enum FloatType {
+    F64 = "f64",
+    F32 = "f32",
+}
+
+#[wasm_bindgen]
 impl FloatInfo {
     #[wasm_bindgen(constructor)]
     pub fn new(v: &str) -> Result<FloatInfo, JsError> {
@@ -183,40 +189,55 @@ impl FloatInfo {
         Ok(serde_wasm_bindgen::to_value(&Constants::new())?)
     }
 
-    pub fn set_f64(&mut self, f64: f64) {
-        self.exact = f64.into();
-        self.f64 = f64;
-        self.f32 = (&self.exact).into();
+    pub fn set_float(&mut self, typ: FloatType, value: f64) {
+        match typ {
+            FloatType::F64 => {
+                self.exact = value.into();
+                self.f64 = value;
+                self.f32 = (&self.exact).into();
+            }
+            FloatType::F32 => {
+                let value = value as f32;
+                self.exact = value.into();
+                self.f64 = (&self.exact).into();
+                self.f32 = value;
+            }
+            FloatType::__Invalid => unreachable!(),
+        }
     }
 
-    pub fn set_f32(&mut self, f32: f32) {
-        self.exact = f32.into();
-        self.f64 = (&self.exact).into();
-        self.f32 = f32;
+    pub fn toggle_bit(&mut self, typ: FloatType, i: u8) {
+        let value = match typ {
+            FloatType::F64 => {
+                let mut bits = self.f64.to_bits();
+                bits ^= 1 << (63 - i);
+                f64::from_bits(bits)
+            }
+            FloatType::F32 => {
+                let mut bits = self.f32.to_bits();
+                bits ^= 1 << (31 - i);
+                f32::from_bits(bits).into()
+            }
+            FloatType::__Invalid => unreachable!(),
+        };
+        self.set_float(typ, value);
     }
 
-    pub fn toggle_bit_f64(&mut self, i: u8) {
-        let mut bits = self.f64.to_bits();
-        bits ^= 1 << (63 - i);
-        self.set_f64(f64::from_bits(bits));
-    }
-
-    pub fn toggle_bit_f32(&mut self, i: u8) {
-        let mut bits = self.f32.to_bits();
-        bits ^= 1 << (31 - i);
-        self.set_f32(f32::from_bits(bits));
-    }
-
-    pub fn add_to_bits_f64(&mut self, i: i32) {
-        let bits = self.f64.to_bits();
-        let bits = bits.wrapping_add_signed(i.into());
-        self.set_f64(f64::from_bits(bits));
-    }
-
-    pub fn add_to_bits_f32(&mut self, i: i32) {
-        let bits = self.f32.to_bits();
-        let bits = bits.wrapping_add_signed(i);
-        self.set_f32(f32::from_bits(bits));
+    pub fn add_to_bits(&mut self, typ: FloatType, i: i8) {
+        let value = match typ {
+            FloatType::F64 => {
+                let bits = self.f64.to_bits();
+                let bits = bits.wrapping_add_signed(i.into());
+                f64::from_bits(bits)
+            }
+            FloatType::F32 => {
+                let bits = self.f32.to_bits();
+                let bits = bits.wrapping_add_signed(i.into());
+                f32::from_bits(bits).into()
+            }
+            FloatType::__Invalid => unreachable!(),
+        };
+        self.set_float(typ, value);
     }
 }
 
