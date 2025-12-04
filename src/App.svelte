@@ -265,6 +265,8 @@ $: console.log(info);
 	summary {
 		display: block;
 		font-size: 1.5em;
+		cursor: pointer;
+		user-select: none;
 	}
 
 	table {
