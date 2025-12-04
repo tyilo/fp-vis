@@ -4,7 +4,7 @@ import { onMount } from "svelte";
 import init, { FloatInfo } from "../fp-vis-wasm/pkg";
 import Values from "./Values.svelte";
 
-let numberInput: HTMLInputElement;
+let numberInput = $state("");
 
 const BitType = ["sign", "exponent", "mantissa"] as const;
 type BitType = (typeof BitType)[number];
@@ -46,9 +46,9 @@ type Constant = {
 };
 type Constants = Record<FloatType, Constant[]>;
 
-let floatInfo: FloatInfo | undefined;
-let info: Info | undefined;
-let constants: Constants | undefined;
+let floatInfo: FloatInfo | undefined = $state(undefined);
+let info: Info | undefined = $state(undefined);
+let constants: Constants | undefined = $state(undefined);
 
 function currentFloatInfo(): FloatInfo {
 	if (floatInfo !== undefined) {
@@ -60,7 +60,7 @@ function currentFloatInfo(): FloatInfo {
 function updateInfo(): void {
 	let newFloatInfo: FloatInfo | undefined;
 	try {
-		newFloatInfo = new FloatInfo(numberInput.value);
+		newFloatInfo = new FloatInfo(numberInput);
 	} catch (e) {
 		alert(`Error parsing input: ${e}`);
 		return;
@@ -74,7 +74,7 @@ function updateInfo(): void {
 
 let ignoreNextHashChange = false;
 function setInput(value: string) {
-	numberInput.value = value;
+	numberInput = value;
 	ignoreNextHashChange = true;
 	window.location.hash = value;
 }
@@ -104,7 +104,7 @@ function handleKeyPress(e: KeyboardEvent): void {
 	if (e.key === "Enter") {
 		e.preventDefault();
 		updateInfo();
-		window.location.hash = numberInput.value;
+		window.location.hash = numberInput;
 	}
 }
 
@@ -156,7 +156,7 @@ function onHashChange(): void {
 }
 
 onMount(async () => {
-	numberInput.value = getHash() || "1 / 3";
+	numberInput = getHash() || "1 / 3";
 	await init();
 	updateInfo();
 	constants = currentFloatInfo().constants();
@@ -164,12 +164,20 @@ onMount(async () => {
 	window.addEventListener("hashchange", onHashChange);
 });
 
-$: console.log(constants);
-$: console.log(info);
+$effect(() => {
+	if (constants !== undefined) {
+		console.log($state.snapshot(constants));
+	}
+});
+$effect(() => {
+	if (info !== undefined) {
+		console.log($state.snapshot(info));
+	}
+});
 </script>
 
 <main>
-	<input type="text" bind:this={numberInput} on:keypress={handleKeyPress} />
+	<input type="text" bind:value={numberInput} onkeypress={handleKeyPress} />
 
 	{#if info}
 		<br />
@@ -182,16 +190,35 @@ $: console.log(info);
 				<summary>{floatType}</summary>
 				{#if constants}
 					{#each constants[floatType] as constant}
-						<button type="button" on:click={() => setBits(floatType, constant.bits)}>{constant.name}</button>
+						<button
+							type="button"
+							onclick={() => setBits(floatType, constant.bits)}
+							>{constant.name}</button
+						>
 					{/each}
 				{/if}
 				<p>{finfo.hex}</p>
 				<svg width="100%" height="30">
-					<line x1="50%" y1="0" x2="50%" y2="30" style="stroke: blue; stroke-width: 3;" />
+					<line
+						x1="50%"
+						y1="0"
+						x2="50%"
+						y2="30"
+						style="stroke: blue; stroke-width: 3;"
+					/>
 					{#each finfo.nearby_floats as nb}
 						{@const x = nb[0] * 0.99 * 50 + 50 + "%"}
-						{@const color = nb[1].decimal === finfo.value.decimal? "black": "gray"}
-						<line x1={x} y1="0" x2={x} y2="30" style="stroke: {color}; stroke-width: 3;" />
+						{@const color =
+							nb[1].decimal === finfo.value.decimal
+								? "black"
+								: "gray"}
+						<line
+							x1={x}
+							y1="0"
+							x2={x}
+							y2="30"
+							style="stroke: {color}; stroke-width: 3;"
+						/>
 					{/each}
 				</svg>
 				<table>
@@ -213,17 +240,21 @@ $: console.log(info);
 								<td
 									class="bit"
 									style="background-color: {colors[bit.typ]}"
-									on:click={() => toggleBit(floatType, bit.i)}
+									onclick={() => toggleBit(floatType, bit.i)}
 									>{bit.value ? 1 : 0}</td
 								>
 							{/each}
 							<td>
-								<button type="button" on:click={() => addToBits(floatType, 1)}
+								<button
+									type="button"
+									onclick={() => addToBits(floatType, 1)}
 									>+</button
 								>
 							</td>
 							<td>
-								<button type="button" on:click={() => addToBits(floatType, -1)}
+								<button
+									type="button"
+									onclick={() => addToBits(floatType, -1)}
 									>-</button
 								>
 							</td>
