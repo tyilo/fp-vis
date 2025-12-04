@@ -37,9 +37,11 @@ type Info = {
 	floats: Record<FloatType, FInfo>;
 };
 
+type Bits = [number, number];
+
 type Constant = {
 	name: string;
-	value: number;
+	bits: Bits;
 };
 type Constants = Record<FloatType, Constant[]>;
 
@@ -90,8 +92,8 @@ function addToBits(floatType: FloatType, n: number): void {
 	setInput(newInfo.floats[floatType].value.fraction);
 }
 
-function setFloat(floatType: FloatType, n: number): void {
-	currentFloatInfo().set_float(floatType, n);
+function setBits(floatType: FloatType, bits: Bits): void {
+	currentFloatInfo().set_bits(floatType, bits);
 	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);
@@ -161,6 +163,7 @@ onMount(async () => {
 	window.addEventListener("hashchange", onHashChange);
 });
 
+$: console.log(constants);
 $: console.log(info);
 </script>
 
@@ -178,7 +181,7 @@ $: console.log(info);
 				<summary>{floatType}</summary>
 				{#if constants}
 					{#each constants[floatType] as constant}
-						<button type="button" on:click={() => setFloat(floatType, constant.value)}>{constant.name}</button>
+						<button type="button" on:click={() => setBits(floatType, constant.bits)}>{constant.name}</button>
 					{/each}
 				{/if}
 				<p>{finfo.hex}</p>
