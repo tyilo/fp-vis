@@ -497,7 +497,7 @@ impl Add for Exact {
                 if s1 == s2 {
                     Exact::Infinite(s1)
                 } else {
-                    Exact::NaN(NaN::default())
+                    Exact::Finite(Sign::Positive, Zero::zero())
                 }
             }
             (Exact::Infinite(s), Exact::Finite(_, _)) => Exact::Infinite(s),
