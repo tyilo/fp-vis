@@ -209,7 +209,8 @@ $effect(() => {
 						>
 					{/each}
 				{/if}
-				<p>{finfo.hex}</p>
+				<br>
+				<br>
 				<svg width="100%" height="30">
 					<line
 						x1="50%"
@@ -233,6 +234,8 @@ $effect(() => {
 						/>
 					{/each}
 				</svg>
+				<h2>Bits</h2>
+				<p>{finfo.hex}</p>
 				<table>
 					<thead>
 						<tr>
@@ -295,6 +298,7 @@ $effect(() => {
 				</table>
 				<br />
 				Category: {finfo.category}
+				<h2>Value</h2>
 				{#if formula}
 					<br />
 					{@html formula}
