@@ -197,6 +197,24 @@ pub struct FloatInfo {
 }
 
 #[wasm_bindgen]
+pub enum BitType {
+    Sign = "sign",
+    Exponent = "exponent",
+    Mantissa = "mantissa",
+}
+
+impl BitType {
+    fn index(&self) -> usize {
+        match self {
+            BitType::Sign => 0,
+            BitType::Exponent => 1,
+            BitType::Mantissa => 2,
+            BitType::__Invalid => unreachable!(),
+        }
+    }
+}
+
+#[wasm_bindgen]
 pub enum FloatType {
     F64 = "f64",
     F32 = "f32",
@@ -266,6 +284,33 @@ impl FloatInfo {
         let bits = match typ {
             FloatType::F64 => self.f64.to_bits().wrapping_add_signed(i.into()),
             FloatType::F32 => self.f32.to_bits().wrapping_add_signed(i.into()).into(),
+            FloatType::__Invalid => unreachable!(),
+        };
+        self.set_bits_inner(typ, bits);
+    }
+
+    pub fn set_raw_part(&mut self, typ: FloatType, bit_type: BitType, value: String) {
+        let mut value: u64 = value.replace([',', ' '], "").parse().unwrap_or(0);
+
+        let bits = match typ {
+            FloatType::F64 => {
+                let mut float_bits = FloatBits::from_float(self.f64);
+                let bits = &mut float_bits.parts_mut()[bit_type.index()];
+                for mut bit in bits.iter_mut().rev() {
+                    *bit = value % 2 == 1;
+                    value /= 2;
+                }
+                f64::to_bits(float_bits.to_float())
+            }
+            FloatType::F32 => {
+                let mut float_bits = FloatBits::from_float(self.f32);
+                let bits = &mut float_bits.parts_mut()[bit_type.index()];
+                for mut bit in bits.iter_mut().rev() {
+                    *bit = value % 2 == 1;
+                    value /= 2;
+                }
+                f32::to_bits(float_bits.to_float()).into()
+            }
             FloatType::__Invalid => unreachable!(),
         };
         self.set_bits_inner(typ, bits);

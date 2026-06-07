@@ -882,7 +882,7 @@ impl<F: FloatingExt> FloatBits<F> {
         }
     }
 
-    fn to_float(&self) -> F {
+    pub(crate) fn to_float(&self) -> F {
         F::from_bits(self.bits.load_be())
     }
 

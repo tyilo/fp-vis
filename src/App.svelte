@@ -2,6 +2,7 @@
 import katex from "katex";
 import { onMount } from "svelte";
 import init, { FloatInfo } from "../fp-vis-wasm/pkg";
+import EditText from "./EditText.svelte";
 import Values from "./Values.svelte";
 
 let numberInput = $state("");
@@ -95,6 +96,17 @@ function addToBits(floatType: FloatType, n: number): void {
 
 function setBits(floatType: FloatType, bits: Bits): void {
 	currentFloatInfo().set_bits(floatType, bits);
+	const newInfo = currentFloatInfo().get_info();
+	info = newInfo;
+	setInput(newInfo.floats[floatType].value.fraction);
+}
+
+function setRawPart(
+	floatType: FloatType,
+	bitType: BitType,
+	value: string,
+): void {
+	currentFloatInfo().set_raw_part(floatType, bitType, value);
 	const newInfo = currentFloatInfo().get_info();
 	info = newInfo;
 	setInput(newInfo.floats[floatType].value.fraction);
@@ -262,7 +274,9 @@ $effect(() => {
 						<tr>
 							{#each BitType as typ}
 								{@const part = finfo.parts[typ]}
-								<td colspan={part.bits.length}>{part.raw_value}</td>
+								<td colspan={part.bits.length}
+									><EditText value={part.raw_value} onchange={value => setRawPart(floatType, typ, value)} /></td
+								>
 							{/each}
 						</tr>
 						<tr>
