@@ -408,10 +408,10 @@ impl Exact {
                 {
                     let mut v = v;
                     for _ in 0..2 {
+                        v = v.prev();
                         if !Floating::is_finite(v) {
                             break;
                         }
-                        v = v.prev();
                         floats.push(v);
                     }
                     floats.reverse();
@@ -422,10 +422,10 @@ impl Exact {
                 {
                     let mut v = v;
                     for _ in 0..2 {
+                        v = v.next();
                         if !Floating::is_finite(v) {
                             break;
                         }
-                        v = v.next();
                         floats.push(v);
                     }
                 }
@@ -1404,6 +1404,14 @@ mod test {
     #[test]
     fn test_nearby_neg_zero() {
         let nearby = Exact::from_float(-0.0).nearby_floats::<f64>();
+        for (f, _, _) in nearby.iter() {
+            assert!(f.abs() <= 1.0, "{nearby:#?}");
+        }
+    }
+
+    #[test]
+    fn test_nearby_max_finite() {
+        let nearby = Exact::from_float(f32::MAX).nearby_floats::<f32>();
         for (f, _, _) in nearby.iter() {
             assert!(f.abs() <= 1.0, "{nearby:#?}");
         }
