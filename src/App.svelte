@@ -101,6 +101,13 @@ function setBits(floatType: FloatType, bits: Bits): void {
 	setInput(newInfo.floats[floatType].value.fraction);
 }
 
+function setHex(floatType: FloatType, hex: string): void {
+	currentFloatInfo().set_hex(floatType, hex);
+	const newInfo = currentFloatInfo().get_info();
+	info = newInfo;
+	setInput(newInfo.floats[floatType].value.fraction);
+}
+
 function setRawPart(
 	floatType: FloatType,
 	bitType: BitType,
@@ -235,7 +242,8 @@ $effect(() => {
 					{/each}
 				</svg>
 				<h2>Bits</h2>
-				<p>{finfo.hex}</p>
+				<EditText value={finfo.hex} onchange={value => setHex(floatType, value)} />
+
 				<table>
 					<thead>
 						<tr>

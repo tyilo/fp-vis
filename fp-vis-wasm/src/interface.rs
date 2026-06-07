@@ -289,6 +289,14 @@ impl FloatInfo {
         self.set_bits_inner(typ, bits);
     }
 
+    pub fn set_hex(&mut self, typ: FloatType, hex: String) {
+        let Some(s) = hex.trim().strip_prefix("0x") else {
+            return;
+        };
+        let bits = u64::from_str_radix(s, 16).unwrap_or(0);
+        self.set_bits_inner(typ, bits);
+    }
+
     pub fn set_raw_part(&mut self, typ: FloatType, bit_type: BitType, value: String) {
         let mut value: u64 = value.replace([',', ' '], "").parse().unwrap_or(0);
 
