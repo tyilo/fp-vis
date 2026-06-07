@@ -1,0 +1,15 @@
+services:
+  app:
+    image: ghcr.io/tyilo/fp-vis
+    restart: always
+    networks:
+      - traefik
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fp-tyilo-com.rule=Host(`fp.tyilo.com`)
+      - traefik.http.services.fp-tyilo-com.loadbalancer.server.port=80
+
+networks:
+  traefik:
+    external: true

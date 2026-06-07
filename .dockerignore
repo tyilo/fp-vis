@@ -1,0 +1,7 @@
+/.git
+
+# From .gitignore:
+/node_modules
+/dist
+/fp-vis-wasm/target
+/fp-vis-wasm/pkg
