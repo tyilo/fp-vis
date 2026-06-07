@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: j178/prek-action@v2
 
   build:
