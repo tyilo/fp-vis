@@ -394,7 +394,9 @@ impl Exact {
         }
     }
 
-    pub(crate) fn nearby_floats<F: FloatingExt + FloatCore + Display>(&self) -> Vec<(f64, Exact)> {
+    pub(crate) fn nearby_floats<F: FloatingExt + FloatCore + Display>(
+        &self,
+    ) -> Vec<(f64, Exact, F)> {
         match self {
             Exact::Finite(_, _) => {
                 let v: F = self.to_float();
@@ -410,12 +412,12 @@ impl Exact {
                             break;
                         }
                         v = v.prev();
-                        floats.push(Exact::from_float(v));
+                        floats.push(v);
                     }
                     floats.reverse();
                 }
 
-                floats.push(Exact::from_float(v));
+                floats.push(v);
 
                 {
                     let mut v = v;
@@ -424,12 +426,17 @@ impl Exact {
                             break;
                         }
                         v = v.next();
-                        floats.push(Exact::from_float(v));
+                        floats.push(v);
                     }
                 }
 
-                let d_neg = self.clone() - floats[0].clone();
-                let d_pos = floats.last().unwrap().clone() - self.clone();
+                let floats = floats
+                    .into_iter()
+                    .map(|f| (Exact::from_float(f), f))
+                    .collect::<Vec<_>>();
+
+                let d_neg = self.clone() - floats[0].0.clone();
+                let d_pos = floats.last().unwrap().0.clone() - self.clone();
 
                 let d_max = match d_neg.partial_cmp(&d_pos).unwrap() {
                     Ordering::Less | Ordering::Equal => d_pos,
@@ -437,7 +444,13 @@ impl Exact {
                 };
                 floats
                     .into_iter()
-                    .map(|v| (((v.clone() - self.clone()) / d_max.clone()).to_float(), v))
+                    .map(|(v, f)| {
+                        (
+                            ((v.clone() - self.clone()) / d_max.clone()).to_float(),
+                            v,
+                            f,
+                        )
+                    })
                     .collect()
             }
             Exact::Infinite(_sign) => {
@@ -1383,7 +1396,7 @@ mod test {
     #[test]
     fn test_nearby_zero() {
         let nearby = Exact::from_float(0.0).nearby_floats::<f64>();
-        for (f, _) in nearby {
+        for (f, _, _) in nearby {
             assert!(f.abs() <= 1.0);
         }
     }
@@ -1391,7 +1404,7 @@ mod test {
     #[test]
     fn test_nearby_neg_zero() {
         let nearby = Exact::from_float(-0.0).nearby_floats::<f64>();
-        for (f, _) in nearby.iter() {
+        for (f, _, _) in nearby.iter() {
             assert!(f.abs() <= 1.0, "{nearby:#?}");
         }
     }

@@ -80,7 +80,7 @@ struct FInfo {
     category: String,
     error: Value,
     parts: FloatParts,
-    nearby_floats: Vec<(f64, Value)>,
+    nearby_floats: Vec<(f64, Value, U32Pair)>,
 }
 
 impl FInfo {
@@ -91,7 +91,7 @@ impl FInfo {
         let nearby_floats = exact
             .nearby_floats::<F>()
             .into_iter()
-            .map(|(f, v)| (f, (&v).into()))
+            .map(|(x, v, f)| (x, (&v).into(), f.into()))
             .collect();
 
         Self {
@@ -138,6 +138,13 @@ impl From<U32Pair> for u64 {
     }
 }
 
+impl<F: FloatingExt> From<F> for U32Pair {
+    fn from(value: F) -> Self {
+        let bits: u64 = value.to_bits().try_into().unwrap_or_else(|_| panic!());
+        Self::from(bits)
+    }
+}
+
 #[derive(Serialize)]
 struct Constant<F> {
     name: &'static str,
@@ -148,10 +155,9 @@ struct Constant<F> {
 
 impl<F: FloatingExt + FloatCore> Constant<F> {
     fn new(name: &'static str, value: F) -> Self {
-        let bits: u64 = value.to_bits().try_into().unwrap_or_else(|_| panic!());
         Self {
             name,
-            bits: bits.into(),
+            bits: value.into(),
             _phantom: PhantomData,
         }
     }

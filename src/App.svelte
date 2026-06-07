@@ -19,8 +19,10 @@ type FloatPart = {
 type Value = {
 	fraction: string;
 	decimal: string;
-	hex_literal: string;
+	hex_literal?: string;
 };
+
+type Bits = [number, number];
 
 type FInfo = {
 	hex: string;
@@ -28,7 +30,7 @@ type FInfo = {
 	category: string;
 	error: Value;
 	parts: Record<BitType, FloatPart>;
-	nearby_floats: [number, Value][];
+	nearby_floats: [number, Value, Bits][];
 };
 
 const FloatType = ["f64", "f32"] as const;
@@ -38,8 +40,6 @@ type Info = {
 	value: Value;
 	floats: Record<FloatType, FInfo>;
 };
-
-type Bits = [number, number];
 
 type Constant = {
 	name: string;
@@ -238,6 +238,14 @@ $effect(() => {
 							x2={x}
 							y2="30"
 							style="stroke: {color}; stroke-width: 3;"
+							onclick={() => setBits(floatType, nb[2])}
+							onkeydown={(e) => {
+								if (e.key === "Enter") {
+									setInput(nb[1].fraction);
+								}
+							}}
+							role="button"
+							tabindex="0"
 						/>
 					{/each}
 				</svg>
